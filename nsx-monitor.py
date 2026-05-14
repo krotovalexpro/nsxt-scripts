@@ -61,7 +61,7 @@ log = logging.getLogger("nsx-monitor")
 # ---------------------------------------------------------------------------
 SCRIPT_DIR = Path(__file__).resolve().parent
 CONFIG_PATH = SCRIPT_DIR / "config.yaml"
-DEFAULT_WORKERS = 25
+DEFAULT_WORKERS = 8
 REQUEST_TIMEOUT = (60, 300)  # (connect, read) seconds — увеличен для медленных NSX
 
 
