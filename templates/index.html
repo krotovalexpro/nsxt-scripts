@@ -229,6 +229,15 @@
 let currentTaskId = null;
 let pollInterval = null;
 
+// Show form on page load if no connections exist or __add__ is selected
+(function() {
+  const select = document.getElementById('nsx-select');
+  const form = document.getElementById('add-form');
+  if (select.value === '__add__') {
+    form.classList.add('show');
+  }
+})();
+
 // NSX selector change
 document.getElementById('nsx-select').addEventListener('change', function() {
   const form = document.getElementById('add-form');
