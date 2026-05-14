@@ -3,7 +3,7 @@ services:
     build: .
     container_name: nsx-monitor
     ports:
-      - "8000:8000"
+      - "80:80"
     volumes:
       # nsx-monitor.py и config.yaml (из основной установки)
       - /root/nsx-monitor:/root/nsx-monitor:ro
