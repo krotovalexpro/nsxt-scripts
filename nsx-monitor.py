@@ -909,14 +909,6 @@ def generate_html_report(
 # Mode Handlers
 # ===================================================================
 
-def _collect(monitor: NSXMonitor, args: argparse.Namespace) -> Tuple[float, List[T1Snapshot]]:
-    """Collect snapshot using Batch API if --batch, otherwise parallel GET."""
-    if args.batch:
-        log.info("Using Batch API mode")
-        return monitor.collect_snapshot_batch()
-    return monitor.collect_snapshot(max_workers=args.workers)
-
-
 def _print_top10(deltas: Dict[str, T1Delta]):
     """Print a top-10 list of busiest T1s to the console."""
     if not deltas:
@@ -970,7 +962,7 @@ def _generate_and_save_report(
 def handle_snapshot(monitor: NSXMonitor, args: argparse.Namespace):
     """Collect and save a snapshot of current T1 counters."""
     log.info("=== Mode: SNAPSHOT ===")
-    ts, snapshots = _collect(monitor, args)
+    ts, snapshots = monitor.collect_snapshot(max_workers=args.workers)
     if not snapshots:
         log.error("No statistics collected — nothing to save.")
         sys.exit(1)
@@ -1005,7 +997,7 @@ def handle_report(monitor: NSXMonitor, args: argparse.Namespace):
         sys.exit(1)
 
     # Collect current snapshot
-    snap2_ts, snap2_list = _collect(monitor, args)
+    snap2_ts, snap2_list = monitor.collect_snapshot(max_workers=args.workers)
     if not snap2_list:
         log.error("Current snapshot is empty")
         sys.exit(1)
@@ -1050,7 +1042,7 @@ def handle_minutes(monitor: NSXMonitor, args: argparse.Namespace):
 
     # --- First snapshot ---
     log.info("Taking initial snapshot…")
-    snap1_ts, snap1_list = _collect(monitor, args)
+    snap1_ts, snap1_list = monitor.collect_snapshot(max_workers=args.workers)
     if not snap1_list:
         log.error("Initial snapshot is empty.")
         sys.exit(1)
@@ -1070,7 +1062,7 @@ def handle_minutes(monitor: NSXMonitor, args: argparse.Namespace):
 
     # --- Second snapshot ---
     log.info("Taking final snapshot…")
-    snap2_ts, snap2_list = _collect(monitor, args)
+    snap2_ts, snap2_list = monitor.collect_snapshot(max_workers=args.workers)
     if not snap2_list:
         log.error("Final snapshot is empty")
         sys.exit(1)
@@ -1113,7 +1105,7 @@ def parse_args(argv: List[str] = None) -> argparse.Namespace:
         prog="nsx-monitor.py",
         description="NSX-T Tier-1 Router Monitor — collect and compare traffic statistics.",
         formatter_class=argparse.RawDescriptionHelpFormatter,
-        epilog="""\nExamples:\n  %(prog)s --snapshot\n  %(prog)s --report --snapshot-file snapshot_20250101_120000.json\n  %(prog)s --report -f snap.json -o report.html\n  %(prog)s --minutes 5\n  %(prog)s -m 10 -o /tmp/report.html\n  %(prog)s --snapshot --batch\n  %(prog)s --minutes 5 --batch\n        """,
+        epilog="""\nExamples:\n  %(prog)s --snapshot\n  %(prog)s --report --snapshot-file snapshot_20250101_120000.json\n  %(prog)s --report -f snap.json -o report.html\n  %(prog)s --minutes 5\n  %(prog)s -m 10 -o /tmp/report.html\n        """,
     )
 
     # Modes (mutually exclusive enforced after parse)
@@ -1165,13 +1157,6 @@ def parse_args(argv: List[str] = None) -> argparse.Namespace:
         "--debug",
         action="store_true",
         help="Enable debug-level logging",
-    )
-
-    # Collect mode
-    parser.add_argument(
-        "--batch",
-        action="store_true",
-        help="Use Batch API (single POST) instead of parallel GET requests",
     )
 
     return parser.parse_args(argv)
