@@ -522,7 +522,7 @@ class NSXMonitor:
 
         # Send one POST instead of 400 GETs
         try:
-            data = self._post("/policy/api/v1/batch", json_body=batch_body)
+            data = self._post("/api/v1/batch", json_body=batch_body)
         except Exception as exc:
             log.error("Batch API request failed: %s", exc)
             log.error("Falling back to parallel GET mode. Use without --batch.")
