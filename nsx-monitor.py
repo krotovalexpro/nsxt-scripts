@@ -751,8 +751,8 @@ def generate_html_report(
             f"  <td class='num' style='{tx_color}'>{_fmt_mbps(tx_mbps)}</td>\n"
             f"  <td class='num'>{rx_pps:.1f}</td>\n"
             f"  <td class='num'>{tx_pps:.1f}</td>\n"
-            f"  <td class='num'>{d.rx_bytes_delta:,}</td>\n"
-            f"  <td class='num'>{d.tx_bytes_delta:,}</td>\n"
+            f"  <td class='num'>{d.rx_bytes_delta / 1_000_000_000:.3f}</td>\n"
+            f"  <td class='num'>{d.tx_bytes_delta / 1_000_000_000:.3f}</td>\n"
             f"  <td class='num'>{d.elapsed_sec:.1f}s</td>\n"
             f"</tr>\n"
         )
@@ -893,8 +893,8 @@ def generate_html_report(
         <th class="num">TX Mbps</th>
         <th class="num">RX pkt/s</th>
         <th class="num">TX pkt/s</th>
-        <th class="num">RX Bytes &#916;</th>
-        <th class="num">TX Bytes &#916;</th>
+        <th class="num">RX GB</th>
+        <th class="num">TX GB</th>
         <th class="num">Interval</th>
       </tr>
     </thead>
