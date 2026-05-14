@@ -3,7 +3,7 @@ services:
     build: .
     container_name: nsx-monitor
     ports:
-      - "8080:80"
+      - "80:80"
     volumes:
       # Персистентные данные: подключения + отчёты
       - nsx-data:/app/data
