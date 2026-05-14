@@ -1156,6 +1156,13 @@ def parse_args(argv: List[str] = None) -> argparse.Namespace:
 
     # Tuning
     parser.add_argument(
+        "--config",
+        type=str,
+        default=None,
+        metavar="FILE",
+        help="Path to config.yaml (default: next to the script)",
+    )
+    parser.add_argument(
         "--workers",
         type=int,
         default=DEFAULT_WORKERS,
@@ -1215,8 +1222,9 @@ def main(argv: List[str] = None) -> None:
         log.error("Only one mode can be used at a time.")
         sys.exit(1)
 
-    # Load config
-    config = load_config()
+    # Load config (custom path or default next to script)
+    config_path = Path(args.config) if args.config else CONFIG_PATH
+    config = load_config(config_path)
     monitor = NSXMonitor(config)
 
     # Route to handler
