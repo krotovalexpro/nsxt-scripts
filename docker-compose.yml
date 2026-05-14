@@ -1,0 +1,15 @@
+services:
+  nsx-monitor:
+    build: .
+    container_name: nsx-monitor
+    ports:
+      - "8080:80"
+    volumes:
+      # Персистентные данные: подключения + отчёты
+      - nsx-data:/app/data
+    restart: unless-stopped
+    environment:
+      - PYTHONUNBUFFERED=1
+
+volumes:
+  nsx-data:

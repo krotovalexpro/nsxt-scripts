@@ -9,3 +9,7 @@ build/
 venv/
 snapshot_*.json
 report_*.html
+data/nsx_connections.json
+data/reports/*
+!data/.gitkeep
+!data/reports/.gitkeep
