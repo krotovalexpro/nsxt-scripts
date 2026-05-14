@@ -854,6 +854,14 @@ def generate_html_report(
   tr:nth-child(even) td {{ background: #fafbfc; }}
   tr:nth-child(even):hover td {{ background: #f0f4ff !important; }}
   .num {{ text-align: right; font-family: 'SF Mono', 'Consolas', 'Liberation Mono', monospace; }}
+
+  /* Sortable headers */
+  th.sortable {{ cursor: pointer; user-select: none; }}
+  th.sortable:hover {{ background: #1a2d5a; }}
+  th.sortable::after {{ content: ' ↕'; font-size: 10px; opacity: 0.4; margin-left: 2px; }}
+  th.sortable.asc::after {{ content: ' ↑'; opacity: 0.9; }}
+  th.sortable.desc::after {{ content: ' ↓'; opacity: 0.9; }}
+
   .mono {{ font-family: 'SF Mono', 'Consolas', 'Liberation Mono', monospace; font-size: 11px; color: #6c757d; }}
 
   /* Footer */
@@ -905,18 +913,18 @@ def generate_html_report(
   <table>
     <thead>
       <tr>
-        <th>#</th>
-        <th>T1 Name</th>
-        <th>ID</th>
-        <th class="num">RX MB/s</th>
-        <th class="num">TX MB/s</th>
-        <th class="num">RX Mbps</th>
-        <th class="num">TX Mbps</th>
-        <th class="num">RX pkt/s</th>
-        <th class="num">TX pkt/s</th>
-        <th class="num">RX GB</th>
-        <th class="num">TX GB</th>
-        <th class="num">Interval</th>
+        <th class="sortable">#</th>
+        <th class="sortable">T1 Name</th>
+        <th class="sortable">ID</th>
+        <th class="sortable num">RX MB/s</th>
+        <th class="sortable num">TX MB/s</th>
+        <th class="sortable num">RX Mbps</th>
+        <th class="sortable num">TX Mbps</th>
+        <th class="sortable num">RX pkt/s</th>
+        <th class="sortable num">TX pkt/s</th>
+        <th class="sortable num">RX GB</th>
+        <th class="sortable num">TX GB</th>
+        <th class="sortable num">Interval</th>
       </tr>
     </thead>
     <tbody>
@@ -930,6 +938,31 @@ def generate_html_report(
   </div>
 
 </div>
+<script>
+const table = document.querySelector('table');
+const tbody = table.querySelector('tbody');
+
+table.querySelectorAll('th.sortable').forEach((th, colIdx) => {{
+  th.addEventListener('click', () => {{
+    const isAsc = th.classList.contains('asc');
+    table.querySelectorAll('th.sortable').forEach(h => h.classList.remove('asc', 'desc'));
+    th.classList.add(isAsc ? 'desc' : 'asc');
+
+    const rows = Array.from(tbody.querySelectorAll('tr'));
+    rows.sort((a, b) => {{
+      let va = a.cells[colIdx].textContent.trim();
+      let vb = b.cells[colIdx].textContent.trim();
+      const na = parseFloat(va.replace(/[^0-9.-]/g, ''));
+      const nb = parseFloat(vb.replace(/[^0-9.-]/g, ''));
+      if (!isNaN(na) && !isNaN(nb)) {{
+        return isAsc ? na - nb : nb - na;
+      }}
+      return isAsc ? va.localeCompare(vb) : vb.localeCompare(va);
+    }});
+    rows.forEach(r => tbody.appendChild(r));
+  }});
+}});
+</script>
 </body>
 </html>"""
     return html
