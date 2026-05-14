@@ -114,7 +114,7 @@ class TaskState:
 _tasks: dict[str, TaskState] = {}
 
 
-def _run_monitor(task: TaskState, conn: dict, minutes: int):
+def _run_monitor(task: TaskState, conn: dict, minutes: int, t1_name: str = ""):
     """Run nsx-monitor.py as a subprocess and track progress."""
     try:
         task.status = "collecting"
@@ -133,6 +133,9 @@ def _run_monitor(task: TaskState, conn: dict, minutes: int):
         report_path = tmp_dir / "report.html"
         snapshot_path = tmp_dir / "snapshot.json"
 
+        # Extra CLI args for T1 filter
+        t1_args = ["--t1-name", t1_name] if t1_name else []
+
         # Phase 1: snapshot
         task.progress = "Phase 1/2: Collecting current counters…"
         result = subprocess.run(
@@ -142,7 +145,7 @@ def _run_monitor(task: TaskState, conn: dict, minutes: int):
                 "--output", str(report_path),
                 "--config", str(config_path),
                 "--workers", "8",
-            ],
+            ] + t1_args,
             cwd=str(tmp_dir),
             capture_output=True, text=True, timeout=600,
         )
@@ -184,7 +187,7 @@ def _run_monitor(task: TaskState, conn: dict, minutes: int):
                 "--output", str(report_path),
                 "--config", str(config_path),
                 "--workers", "8",
-            ],
+            ] + t1_args,
             cwd=str(tmp_dir),
             capture_output=True, text=True, timeout=600,
         )
@@ -246,6 +249,7 @@ async def delete_connection(name: str = Form(...)):
 async def run_report(
     nsx_name: str = Form(...),
     minutes: int = Form(5),
+    t1_name: str = Form(""),
 ):
     # Find connection
     conn = next((c for c in CONNECTIONS if c["name"] == nsx_name), None)
@@ -267,7 +271,7 @@ async def run_report(
     _tasks[task_id] = task
 
     # Launch in background thread
-    thread = Thread(target=_run_monitor, args=(task, conn, minutes), daemon=True)
+    thread = Thread(target=_run_monitor, args=(task, conn, minutes, t1_name), daemon=True)
     thread.start()
 
     return {"status": "started", "task_id": task_id, "nsx_name": nsx_name}
@@ -278,6 +282,7 @@ async def run_report_with_password(
     nsx_name: str = Form(...),
     password: str = Form(...),
     minutes: int = Form(5),
+    t1_name: str = Form(""),
 ):
     conn = next((c for c in CONNECTIONS if c["name"] == nsx_name), None)
     if not conn:
@@ -301,7 +306,7 @@ async def run_report_with_password(
     task = TaskState(task_id, conn["name"])
     _tasks[task_id] = task
 
-    thread = Thread(target=_run_monitor, args=(task, conn, minutes), daemon=True)
+    thread = Thread(target=_run_monitor, args=(task, conn, minutes, t1_name), daemon=True)
     thread.start()
 
     return {"status": "started", "task_id": task_id, "nsx_name": conn["name"]}

@@ -185,6 +185,10 @@
         <input type="password" id="password" placeholder="оставьте пустым если сохранён" style="min-width:180px">
       </div>
       <div class="form-group">
+        <label>Конкретный T1 (опционально)</label>
+        <input type="text" id="t1-name" placeholder="оставьте пустым — все T1" style="min-width:180px">
+      </div>
+      <div class="form-group">
         <button class="btn btn-primary" id="run-btn" onclick="runReport()">▶ Запустить</button>
       </div>
     </div>
@@ -299,6 +303,7 @@ async function runReport() {
   const form = new FormData();
   form.append('nsx_name', nsxName);
   form.append('minutes', minutes);
+  form.append('t1_name', document.getElementById('t1-name').value.trim());
 
   let endpoint = '/run';
   if (password) {

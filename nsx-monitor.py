@@ -419,9 +419,15 @@ class NSXMonitor:
     # Full snapshot
     # ------------------------------------------------------------------
 
-    def collect_snapshot(self, max_workers: int = DEFAULT_WORKERS) -> Tuple[float, List[T1Snapshot]]:
+    def collect_snapshot(self, max_workers: int = DEFAULT_WORKERS,
+                         t1_names: Optional[List[str]] = None) -> Tuple[float, List[T1Snapshot]]:
         """
-        Collect statistics for *all* Tier-1 routers in parallel.
+        Collect statistics for Tier-1 routers in parallel.
+
+        Args:
+            max_workers: Number of parallel worker threads.
+            t1_names: If provided, only collect T1s whose display_name or id
+                      matches one of these values (case-insensitive).
 
         Returns:
             (start_timestamp_epoch, list_of_T1Snapshot)
@@ -430,6 +436,21 @@ class NSXMonitor:
         if not tier1s:
             log.error("No Tier-1 routers returned by the API")
             return time.time(), []
+
+        # Filter by specific T1 name(s) if requested
+        if t1_names:
+            names_lower = [n.lower() for n in t1_names]
+            filtered: List[dict] = []
+            for t1 in tier1s:
+                t1_display = (t1.get("display_name") or "").lower()
+                t1_id = (t1.get("id") or "").lower()
+                if any(n in t1_display or n in t1_id for n in names_lower):
+                    filtered.append(t1)
+            if not filtered:
+                log.warning("No T1s matched filter %s (out of %d total)", t1_names, len(tier1s))
+                return time.time(), []
+            tier1s = filtered
+            log.info("Filtered to %d T1s matching '%s'", len(tier1s), t1_names)
 
         start_ts = time.time()
         snapshots: List[T1Snapshot] = []
@@ -971,7 +992,8 @@ def _generate_and_save_report(
 def handle_snapshot(monitor: NSXMonitor, args: argparse.Namespace):
     """Collect and save a snapshot of current T1 counters."""
     log.info("=== Mode: SNAPSHOT ===")
-    ts, snapshots = monitor.collect_snapshot(max_workers=args.workers)
+    t1_names = [args.t1_name] if args.t1_name else None
+    ts, snapshots = monitor.collect_snapshot(max_workers=args.workers, t1_names=t1_names)
     if not snapshots:
         log.error("No statistics collected — nothing to save.")
         sys.exit(1)
@@ -1006,7 +1028,8 @@ def handle_report(monitor: NSXMonitor, args: argparse.Namespace):
         sys.exit(1)
 
     # Collect current snapshot
-    snap2_ts, snap2_list = monitor.collect_snapshot(max_workers=args.workers)
+    t1_names = [args.t1_name] if args.t1_name else None
+    snap2_ts, snap2_list = monitor.collect_snapshot(max_workers=args.workers, t1_names=t1_names)
     if not snap2_list:
         log.error("Current snapshot is empty")
         sys.exit(1)
@@ -1051,7 +1074,8 @@ def handle_minutes(monitor: NSXMonitor, args: argparse.Namespace):
 
     # --- First snapshot ---
     log.info("Taking initial snapshot…")
-    snap1_ts, snap1_list = monitor.collect_snapshot(max_workers=args.workers)
+    t1_names = [args.t1_name] if args.t1_name else None
+    snap1_ts, snap1_list = monitor.collect_snapshot(max_workers=args.workers, t1_names=t1_names)
     if not snap1_list:
         log.error("Initial snapshot is empty.")
         sys.exit(1)
@@ -1071,7 +1095,7 @@ def handle_minutes(monitor: NSXMonitor, args: argparse.Namespace):
 
     # --- Second snapshot ---
     log.info("Taking final snapshot…")
-    snap2_ts, snap2_list = monitor.collect_snapshot(max_workers=args.workers)
+    snap2_ts, snap2_list = monitor.collect_snapshot(max_workers=args.workers, t1_names=t1_names)
     if not snap2_list:
         log.error("Final snapshot is empty")
         sys.exit(1)
@@ -1161,6 +1185,13 @@ def parse_args(argv: List[str] = None) -> argparse.Namespace:
         default=None,
         metavar="FILE",
         help="Path to config.yaml (default: next to the script)",
+    )
+    parser.add_argument(
+        "--t1-name",
+        type=str,
+        default=None,
+        metavar="NAME",
+        help="Only collect traffic for a specific T1 (by display_name or id). Omit for all T1s.",
     )
     parser.add_argument(
         "--workers",
