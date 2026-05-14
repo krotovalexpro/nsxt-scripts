@@ -1,0 +1,5 @@
+__pycache__/
+*.pyc
+*.pyo
+data/nsx_connections.json
+data/reports/

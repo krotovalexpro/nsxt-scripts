@@ -1,0 +1,14 @@
+[
+  {
+    "name": "NSX-Prod",
+    "url": "https://nsx-prod.example.com",
+    "username": "admin",
+    "password": ""
+  },
+  {
+    "name": "NSX-Test",
+    "url": "https://nsx-test.example.com",
+    "username": "auditor",
+    "password": ""
+  }
+]

@@ -1,0 +1,380 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>NSX-T Traffic Monitor</title>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+    background: #0d1117;
+    color: #e6edf3;
+    min-height: 100vh;
+  }
+  .container { max-width: 1200px; margin: 0 auto; padding: 24px; }
+  h1 {
+    font-size: 24px;
+    margin-bottom: 4px;
+    color: #f0f6fc;
+  }
+  .subtitle { color: #8b949e; font-size: 14px; margin-bottom: 24px; }
+
+  /* Cards */
+  .card {
+    background: #161b22;
+    border: 1px solid #30363d;
+    border-radius: 8px;
+    padding: 20px;
+    margin-bottom: 16px;
+  }
+  .card h2 {
+    font-size: 16px;
+    color: #f0f6fc;
+    margin-bottom: 12px;
+  }
+
+  /* Form */
+  .form-row {
+    display: flex;
+    gap: 12px;
+    align-items: flex-end;
+    flex-wrap: wrap;
+    margin-bottom: 12px;
+  }
+  .form-group { display: flex; flex-direction: column; gap: 4px; }
+  .form-group label {
+    font-size: 11px;
+    color: #8b949e;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+  }
+  select, input[type="text"], input[type="password"], input[type="number"] {
+    background: #0d1117;
+    border: 1px solid #30363d;
+    border-radius: 6px;
+    color: #e6edf3;
+    padding: 8px 12px;
+    font-size: 14px;
+    min-width: 200px;
+    outline: none;
+    transition: border-color 0.2s;
+  }
+  select:focus, input:focus { border-color: #58a6ff; }
+
+  .btn {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    padding: 8px 20px;
+    border: none;
+    border-radius: 6px;
+    font-size: 14px;
+    font-weight: 500;
+    cursor: pointer;
+    transition: background 0.2s;
+    text-decoration: none;
+  }
+  .btn-primary { background: #238636; color: #fff; }
+  .btn-primary:hover { background: #2ea043; }
+  .btn-primary:disabled { background: #1a5a2a; opacity: 0.6; cursor: not-allowed; }
+  .btn-danger { background: #da3633; color: #fff; }
+  .btn-danger:hover { background: #f85149; }
+  .btn-secondary { background: #21262d; color: #e6edf3; border: 1px solid #30363d; }
+  .btn-secondary:hover { background: #30363d; }
+
+  /* Add NSX form — hidden by default */
+  #add-form { display: none; margin-top: 12px; }
+  #add-form.show { display: block; }
+
+  /* Status */
+  #status { margin-top: 16px; }
+  .status-box {
+    background: #0d1117;
+    border: 1px solid #30363d;
+    border-radius: 6px;
+    padding: 16px;
+    margin-bottom: 12px;
+  }
+  .status-box .nsx-name { color: #58a6ff; font-weight: 600; }
+  .status-box .label { color: #8b949e; font-size: 12px; }
+  .status-box .value { color: #e6edf3; font-family: monospace; margin-top: 4px; }
+  .progress-bar {
+    width: 100%;
+    height: 4px;
+    background: #30363d;
+    border-radius: 2px;
+    margin-top: 12px;
+    overflow: hidden;
+  }
+  .progress-bar .fill {
+    height: 100%;
+    background: #238636;
+    transition: width 1s ease;
+    border-radius: 2px;
+  }
+
+  /* Tasks list */
+  .task-item {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 8px 12px;
+    border-bottom: 1px solid #21262d;
+    font-size: 13px;
+  }
+  .task-item:last-child { border-bottom: none; }
+  .task-item .status-badge {
+    padding: 2px 8px;
+    border-radius: 10px;
+    font-size: 11px;
+    font-weight: 500;
+  }
+  .badge-done { background: #1a5a2a; color: #7ee787; }
+  .badge-error { background: #5a1a1a; color: #ff7b72; }
+  .badge-running { background: #1a3a5a; color: #79c0ff; }
+
+  /* Report iframe */
+  #report-frame {
+    width: 100%;
+    height: 0;
+    border: 1px solid #30363d;
+    border-radius: 8px;
+    margin-top: 16px;
+    background: #fff;
+  }
+
+  .delete-btn {
+    background: none;
+    border: none;
+    color: #da3633;
+    cursor: pointer;
+    font-size: 16px;
+    padding: 4px;
+    opacity: 0.6;
+  }
+  .delete-btn:hover { opacity: 1; }
+</style>
+</head>
+<body>
+<div class="container">
+  <h1>🔍 NSX-T Traffic Monitor</h1>
+  <div class="subtitle">Выберите NSX Manager и запустите сбор статистики T1</div>
+
+  <!-- NSX Selector -->
+  <div class="card">
+    <h2>NSX Manager</h2>
+    <div class="form-row">
+      <div class="form-group" style="flex:1;min-width:250px">
+        <label>Выберите NSX</label>
+        <select id="nsx-select">
+          {% for conn in connections %}
+          <option value="{{ conn.name }}">
+            {{ conn.name }} — {{ conn.url }}
+          </option>
+          {% endfor %}
+          <option value="__add__">➕ Добавить новый NSX…</option>
+        </select>
+      </div>
+      <div class="form-group">
+        <label>Интервал (мин)</label>
+        <input type="number" id="minutes" value="5" min="1" max="60" style="width:80px;min-width:80px">
+      </div>
+      <div class="form-group">
+        <label>Пароль (если не сохранён)</label>
+        <input type="password" id="password" placeholder="оставьте пустым если сохранён" style="min-width:180px">
+      </div>
+      <div class="form-group">
+        <button class="btn btn-primary" id="run-btn" onclick="runReport()">▶ Запустить</button>
+      </div>
+    </div>
+
+    <!-- Add NSX form -->
+    <div id="add-form">
+      <h2 style="font-size:14px;color:#8b949e;margin-bottom:8px">Новое подключение NSX</h2>
+      <div class="form-row">
+        <div class="form-group"><label>Название</label><input type="text" id="new-name" placeholder="NSX-Prod"></div>
+        <div class="form-group"><label>URL</label><input type="text" id="new-url" placeholder="https://nsx-manager.local"></div>
+        <div class="form-group"><label>Логин</label><input type="text" id="new-user" placeholder="admin"></div>
+        <div class="form-group"><label>Пароль</label><input type="password" id="new-pass" placeholder="••••••••"></div>
+        <div class="form-group">
+          <button class="btn btn-secondary" onclick="addNSX()" style="margin-top:18px">➕ Добавить</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Connections list -->
+  <div class="card">
+    <h2>Сохранённые подключения</h2>
+    <div id="connections-list">
+      {% for conn in connections %}
+      <div class="task-item" data-name="{{ conn.name }}">
+        <span><strong>{{ conn.name }}</strong> — {{ conn.url }} <span style="color:#8b949e">({{ conn.username }})</span></span>
+        <button class="delete-btn" onclick="deleteNSX('{{ conn.name }}')" title="Удалить">✕</button>
+      </div>
+      {% endfor %}
+      {% if not connections %}
+      <div style="color:#8b949e;font-size:13px;padding:12px">Нет сохранённых подключений. Добавьте через "+ Добавить новый NSX…"</div>
+      {% endif %}
+    </div>
+  </div>
+
+  <!-- Status & Report -->
+  <div id="status"></div>
+  <iframe id="report-frame" sandbox="allow-scripts allow-same-origin"></iframe>
+</div>
+
+<script>
+let currentTaskId = null;
+let pollInterval = null;
+
+// NSX selector change
+document.getElementById('nsx-select').addEventListener('change', function() {
+  const form = document.getElementById('add-form');
+  if (this.value === '__add__') {
+    form.classList.add('show');
+  } else {
+    form.classList.remove('show');
+  }
+});
+
+// Add NSX
+async function addNSX() {
+  const name = document.getElementById('new-name').value.trim();
+  const url = document.getElementById('new-url').value.trim();
+  const user = document.getElementById('new-user').value.trim();
+  const pass = document.getElementById('new-pass').value;
+  if (!name || !url || !user) { alert('Заполните название, URL и логин'); return; }
+
+  const form = new FormData();
+  form.append('name', name);
+  form.append('url', url);
+  form.append('username', user);
+  form.append('password', pass);
+
+  try {
+    const resp = await fetch('/connections/add', { method: 'POST', body: form });
+    const data = await resp.json();
+    location.reload();
+  } catch(e) {
+    alert('Ошибка: ' + e.message);
+  }
+}
+
+// Delete NSX
+async function deleteNSX(name) {
+  if (!confirm(`Удалить подключение "${name}"?`)) return;
+  const form = new FormData();
+  form.append('name', name);
+  await fetch('/connections/delete', { method: 'POST', body: form });
+  location.reload();
+}
+
+// Run report
+async function runReport() {
+  const select = document.getElementById('nsx-select');
+  const nsxName = select.value;
+  const minutes = document.getElementById('minutes').value;
+  const password = document.getElementById('password').value;
+
+  if (!nsxName || nsxName === '__add__') {
+    alert('Выберите NSX Manager из списка');
+    return;
+  }
+
+  const runBtn = document.getElementById('run-btn');
+  runBtn.disabled = true;
+  runBtn.textContent = '⏳ Запуск…';
+
+  const form = new FormData();
+  form.append('nsx_name', nsxName);
+  form.append('minutes', minutes);
+
+  let endpoint = '/run';
+  if (password) {
+    endpoint = '/run-with-password';
+    form.append('password', password);
+  }
+
+  try {
+    const resp = await fetch(endpoint, { method: 'POST', body: form });
+    const data = await resp.json();
+
+    if (data.status === 'need_password') {
+      document.getElementById('password').focus();
+      alert('Для "' + nsxName + '" не сохранён пароль. Введите его в поле "Пароль" и нажмите "Запустить" снова.');
+      runBtn.disabled = false;
+      runBtn.textContent = '▶ Запустить';
+      return;
+    }
+
+    currentTaskId = data.task_id;
+    startPolling(data.task_id);
+  } catch(e) {
+    alert('Ошибка запуска: ' + e.message);
+    runBtn.disabled = false;
+    runBtn.textContent = '▶ Запустить';
+  }
+}
+
+// Poll task status
+function startPolling(taskId) {
+  const statusDiv = document.getElementById('status');
+  const frame = document.getElementById('report-frame');
+
+  if (pollInterval) clearInterval(pollInterval);
+
+  pollInterval = setInterval(async () => {
+    try {
+      const resp = await fetch('/task/' + taskId);
+      const task = await resp.json();
+
+      // Update status
+      let html = '<div class="status-box">';
+      html += '<div><span class="nsx-name">' + task.nsx_name + '</span></div>';
+      html += '<div class="value">' + task.progress + '</div>';
+
+      if (task.status === 'collecting' || task.status === 'waiting' || task.status === 'starting') {
+        html += '<div class="progress-bar"><div class="fill" style="width:60%"></div></div>';
+      }
+
+      if (task.status === 'done') {
+        html = '<div class="status-box" style="border-color:#238636">';
+        html += '<div><span class="nsx-name">' + task.nsx_name + '</span> ✅ <span style="color:#7ee787">Готово!</span></div>';
+        html += '<div style="margin-top:8px"><a class="btn btn-primary" href="/report/' + taskId + '" target="_blank">📊 Открыть отчёт</a></div>';
+        html += '</div>';
+
+        // Load report inline
+        frame.style.height = '800px';
+        frame.src = '/report/' + taskId;
+
+        clearInterval(pollInterval);
+        pollInterval = null;
+        document.getElementById('run-btn').disabled = false;
+        document.getElementById('run-btn').textContent = '▶ Запустить';
+      }
+
+      if (task.status === 'error') {
+        html = '<div class="status-box" style="border-color:#da3633">';
+        html += '<div><span class="nsx-name">' + task.nsx_name + '</span> ❌ <span style="color:#ff7b72">Ошибка</span></div>';
+        html += '<div class="value" style="color:#ff7b72">' + task.error + '</div>';
+        html += '</div>';
+
+        clearInterval(pollInterval);
+        pollInterval = null;
+        document.getElementById('run-btn').disabled = false;
+        document.getElementById('run-btn').textContent = '▶ Запустить';
+      }
+
+      html += '</div>';
+      statusDiv.innerHTML = html;
+
+    } catch(e) {
+      /* ignore */
+    }
+  }, 2000);
+}
+</script>
+</body>
+</html>

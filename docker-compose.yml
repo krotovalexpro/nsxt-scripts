@@ -1,0 +1,17 @@
+services:
+  nsx-monitor:
+    build: .
+    container_name: nsx-monitor
+    ports:
+      - "8000:8000"
+    volumes:
+      # nsx-monitor.py и config.yaml (из основной установки)
+      - /root/nsx-monitor:/root/nsx-monitor:ro
+      # Персистентные данные: подключения + отчёты
+      - nsx-data:/app/data
+    restart: unless-stopped
+    environment:
+      - PYTHONUNBUFFERED=1
+
+volumes:
+  nsx-data:
