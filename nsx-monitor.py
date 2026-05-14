@@ -377,8 +377,17 @@ class NSXMonitor:
 
         try:
             stats = self.get_t1_statistics(t1_id)
+        except requests.exceptions.HTTPError as exc:
+            status = exc.response.status_code if exc.response is not None else "?"
+            if status == 429:
+                log.warning("T1 '%s' (%s): rate limited (429), skipped", name, t1_id)
+            elif status == 400:
+                log.debug("T1 '%s' (%s): bad request (400) — no T0 interface?", name, t1_id)
+            else:
+                log.warning("T1 '%s' (%s): HTTP %s — %s", name, t1_id, status, exc)
+            return None
         except Exception as exc:
-            log.warning("Failed to fetch stats for T1 '%s' (%s): %s", name, t1_id, exc)
+            log.warning("T1 '%s' (%s): failed — %s", name, t1_id, exc)
             return None
 
         if stats is None:
