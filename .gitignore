@@ -2,4 +2,5 @@ __pycache__/
 *.pyc
 *.pyo
 data/nsx_connections.json
-data/reports/
+data/reports/*
+!data/reports/.gitkeep
