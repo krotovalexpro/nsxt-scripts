@@ -1,0 +1,790 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>NSX-T T1 Traffic Report</title>
+<style>
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+    background: #0d1117;
+    color: #d0d4dc;
+    padding: 20px;
+    min-height: 100vh;
+  }
+
+  .container {
+    max-width: 1600px;
+    margin: 0 auto;
+  }
+
+  /* ── Header ── */
+  header {
+    display: flex;
+    flex-wrap: wrap;
+    justify-content: space-between;
+    align-items: center;
+    gap: 12px;
+    background: linear-gradient(135deg, #161b22 0%, #1c2333 100%);
+    border: 1px solid #30363d;
+    border-radius: 12px;
+    padding: 20px 28px;
+    margin-bottom: 20px;
+    box-shadow: 0 4px 24px rgba(0,0,0,0.4);
+  }
+
+  header h1 {
+    font-size: 22px;
+    font-weight: 700;
+    color: #f0f4fc;
+    letter-spacing: 0.3px;
+  }
+  header h1 span { color: #58a6ff; }
+
+  .report-info {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 20px;
+    font-size: 13px;
+    color: #8b949e;
+  }
+  .report-info .label { color: #6e7681; }
+  .report-info .value { color: #d0d4dc; font-weight: 600; }
+
+  /* ── Controls ── */
+  .controls {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 12px;
+    align-items: center;
+    margin-bottom: 16px;
+  }
+  .controls input, .controls select {
+    background: #161b22;
+    border: 1px solid #30363d;
+    border-radius: 8px;
+    padding: 10px 14px;
+    color: #d0d4dc;
+    font-size: 14px;
+    outline: none;
+    transition: border-color 0.2s, box-shadow 0.2s;
+  }
+  .controls input:focus, .controls select:focus {
+    border-color: #58a6ff;
+    box-shadow: 0 0 0 3px rgba(88,166,255,0.15);
+  }
+  .controls input { flex: 1 1 260px; min-width: 180px; }
+  .controls input::placeholder { color: #484f58; }
+  .controls select { flex: 0 0 auto; cursor: pointer; }
+  .controls button {
+    background: linear-gradient(135deg, #1f6feb 0%, #1158c7 100%);
+    border: none;
+    border-radius: 8px;
+    padding: 10px 20px;
+    color: #fff;
+    font-size: 14px;
+    font-weight: 600;
+    cursor: pointer;
+    transition: opacity 0.2s, transform 0.15s;
+    white-space: nowrap;
+  }
+  .controls button:hover { opacity: 0.9; transform: translateY(-1px); }
+  .controls button:active { transform: translateY(0); }
+  .controls .stats-badge {
+    font-size: 13px;
+    color: #8b949e;
+    padding: 6px 14px;
+    background: #161b22;
+    border: 1px solid #30363d;
+    border-radius: 20px;
+    white-space: nowrap;
+  }
+  .controls .stats-badge strong { color: #d0d4dc; }
+
+  /* ── Table ── */
+  .table-wrapper {
+    background: #161b22;
+    border: 1px solid #30363d;
+    border-radius: 12px;
+    overflow: hidden;
+    box-shadow: 0 4px 20px rgba(0,0,0,0.3);
+  }
+
+  table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 14px;
+  }
+
+  thead {
+    background: #1c2333;
+    position: sticky;
+    top: 0;
+    z-index: 2;
+  }
+  thead th {
+    padding: 12px 14px;
+    text-align: left;
+    font-weight: 600;
+    font-size: 12px;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    color: #8b949e;
+    border-bottom: 2px solid #30363d;
+    cursor: pointer;
+    user-select: none;
+    white-space: nowrap;
+    position: relative;
+    transition: color 0.15s, background 0.15s;
+  }
+  thead th:hover { color: #f0f4fc; background: #212a3e; }
+  thead th.sorted-asc::after { content: ' ▲'; font-size: 10px; color: #58a6ff; }
+  thead th.sorted-desc::after { content: ' ▼'; font-size: 10px; color: #58a6ff; }
+
+  tbody tr {
+    border-bottom: 1px solid #21262d;
+    transition: background 0.15s;
+  }
+  tbody tr:last-child { border-bottom: none; }
+  tbody tr:hover { background: #1c2333 !important; }
+  tbody tr:nth-child(even) { background: #0d1117; }
+  tbody tr:nth-child(odd) { background: #161b22; }
+
+  tbody td {
+    padding: 10px 14px;
+    vertical-align: middle;
+    white-space: nowrap;
+  }
+
+  /* Highlight rows */
+  tbody tr.row-critical { background: #3d1111 !important; }
+  tbody tr.row-critical:hover { background: #4a1a1a !important; }
+  tbody tr.row-critical td:first-child {
+    border-left: 3px solid #f85149;
+  }
+
+  tbody tr.row-warning { background: #3d3111 !important; }
+  tbody tr.row-warning:hover { background: #4a3d1a !important; }
+  tbody tr.row-warning td:first-child {
+    border-left: 3px solid #d29922;
+  }
+
+  /* Cell types */
+  td.num { color: #6e7681; text-align: center; width: 40px; }
+  td.name-cell { max-width: 280px; overflow: hidden; text-overflow: ellipsis; }
+  td.name-cell .display-name { color: #f0f4fc; font-weight: 600; display: block; }
+  td.name-cell .t1-id { color: #6e7681; font-size: 12px; display: block; margin-top: 2px; font-family: 'SFMono-Regular', Consolas, 'Liberation Mono', Menlo, monospace; }
+  td.metric { text-align: right; font-family: 'SFMono-Regular', Consolas, 'Liberation Mono', Menlo, monospace; font-size: 13px; }
+  td.metric.total { color: #58a6ff; font-weight: 700; }
+  td.metric.positive { color: #3fb950; }
+  td.metric.neutral { color: #d0d4dc; }
+  td.metric.danger { color: #f85149; }
+
+  /* ── Empty state ── */
+  .empty-state {
+    text-align: center;
+    padding: 60px 20px;
+    color: #484f58;
+  }
+  .empty-state .icon { font-size: 48px; margin-bottom: 12px; }
+  .empty-state p { font-size: 16px; }
+
+  /* ── Toast notification for CSV ── */
+  .toast {
+    position: fixed;
+    bottom: 24px;
+    left: 50%;
+    transform: translateX(-50%) translateY(80px);
+    padding: 12px 28px;
+    border-radius: 8px;
+    font-size: 14px;
+    font-weight: 600;
+    opacity: 0;
+    transition: transform 0.35s ease, opacity 0.35s ease;
+    z-index: 999;
+    pointer-events: none;
+  }
+  .toast.show {
+    transform: translateX(-50%) translateY(0);
+    opacity: 1;
+  }
+  .toast.success { background: #1f6feb; color: #fff; box-shadow: 0 4px 20px rgba(31,111,235,0.3); }
+
+  /* ── Responsive ── */
+  @media (max-width: 1024px) {
+    header { flex-direction: column; align-items: flex-start; gap: 8px; }
+    .report-info { width: 100%; justify-content: flex-start; }
+    td.name-cell { max-width: 180px; }
+  }
+
+  @media (max-width: 768px) {
+    body { padding: 12px; }
+    header { padding: 16px 20px; }
+    header h1 { font-size: 18px; }
+    .controls { flex-direction: column; align-items: stretch; }
+    .controls input { flex: 1 1 auto; }
+    .controls select { width: 100%; }
+    .controls button { width: 100%; justify-content: center; }
+    .controls .stats-badge { text-align: center; }
+
+    .table-wrapper { overflow-x: auto; -webkit-overflow-scrolling: touch; }
+    table { font-size: 12px; }
+    thead th, tbody td { padding: 8px 10px; }
+    td.name-cell { max-width: 120px; }
+  }
+
+  @media (max-width: 480px) {
+    thead th, tbody td { padding: 6px 8px; font-size: 11px; }
+    td.name-cell { max-width: 80px; }
+  }
+
+  /* ── Scrollbar styling ── */
+  .table-wrapper::-webkit-scrollbar { height: 8px; }
+  .table-wrapper::-webkit-scrollbar-track { background: #0d1117; }
+  .table-wrapper::-webkit-scrollbar-thumb { background: #30363d; border-radius: 4px; }
+  .table-wrapper::-webkit-scrollbar-thumb:hover { background: #484f58; }
+</style>
+</head>
+<body>
+
+<div class="container">
+
+  <!-- ═══ HEADER ═══ -->
+  <header>
+    <div>
+      <h1>╲ NSX-T <span>T1</span> Traffic Report</h1>
+    </div>
+    <div class="report-info">
+      <span><span class="label">Report:</span> <span class="value">{{ report_date }} {{ report_time }}</span></span>
+      <span><span class="label">Period:</span> <span class="value">{{ period_start }}  →  {{ period_end }}</span></span>
+      <span><span class="label">T1 Gateways:</span> <span class="value" id="totalCount">0</span></span>
+    </div>
+  </header>
+
+  <!-- ═══ CONTROLS ═══ -->
+  <div class="controls">
+    <input type="text" id="searchInput" placeholder="🔍  Search by T1 name or ID…" autocomplete="off">
+    <select id="topSelect">
+      <option value="all">Show All</option>
+      <option value="10">Top 10</option>
+      <option value="20">Top 20</option>
+      <option value="50">Top 50</option>
+    </select>
+    <button id="exportBtn">📥 Export CSV</button>
+    <span class="stats-badge" id="statsBadge">Showing <strong id="shownCount">0</strong> / <strong id="totalCount2">0</strong></span>
+  </div>
+
+  <!-- ═══ TABLE ═══ -->
+  <div class="table-wrapper">
+    <table>
+      <thead>
+        <tr>
+          <th data-col="num" data-numeric="true">#</th>
+          <th data-col="name">T1 Name</th>
+          <th data-col="rx" data-numeric="true">RX (MB)</th>
+          <th data-col="tx" data-numeric="true">TX (MB)</th>
+          <th data-col="total" data-numeric="true" class="sorted-desc">Total (MB)</th>
+          <th data-col="rx_packets" data-numeric="true">RX Packets</th>
+          <th data-col="tx_packets" data-numeric="true">TX Packets</th>
+          <th data-col="rx_rate" data-numeric="true">RX Rate (Mbps)</th>
+          <th data-col="tx_rate" data-numeric="true">TX Rate (Mbps)</th>
+          <th data-col="dropped_rx" data-numeric="true">Dropped RX</th>
+          <th data-col="dropped_tx" data-numeric="true">Dropped TX</th>
+        </tr>
+      </thead>
+      <tbody id="tableBody">
+        <tr class="empty-state">
+          <td colspan="11">
+            <div class="empty-state">
+              <div class="icon">📡</div>
+              <p>Loading traffic data…</p>
+            </div>
+          </td>
+        </tr>
+      </tbody>
+    </table>
+  </div>
+
+  <!-- ═══ FOOTER ═══ -->
+  <div style="text-align:center; margin-top:16px; font-size:12px; color:#484f58;">
+    NSX-T Monitor · Generated by automation
+  </div>
+</div>
+
+<!-- ═══ TOAST ═══ -->
+<div class="toast success" id="toast">✓ Copied to clipboard</div>
+
+<script>
+(function() {
+  'use strict';
+
+  /* ─── TEST / DEMO DATA ───
+     In production, {{ rows }} is replaced by Python with a JSON array.
+     For standalone demo, fallback data is used.
+  */
+  var DEMO_DATA = [
+    {
+      "name": "T1-Prod-Gateway-01",
+      "id": "t1-2c1a5e7b-8d3f-4a0b-9c6e-1f2d3e4a5b6c",
+      "rx_mb": 18542.31,
+      "tx_mb": 12486.74,
+      "total_mb": 31029.05,
+      "rx_packets": 284561234,
+      "tx_packets": 195432167,
+      "rx_rate_mbps": 62.14,
+      "tx_rate_mbps": 41.73,
+      "dropped_rx": 234,
+      "dropped_tx": 56
+    },
+    {
+      "name": "T1-Prod-Gateway-02",
+      "id": "t1-3d2b6f8c-9e4a-5b1c-0d7f-2e3f4a5b6c7d",
+      "rx_mb": 15321.45,
+      "tx_mb": 9876.32,
+      "total_mb": 25197.77,
+      "rx_packets": 231456789,
+      "tx_packets": 152345678,
+      "rx_rate_mbps": 51.23,
+      "tx_rate_mbps": 33.02,
+      "dropped_rx": 178,
+      "dropped_tx": 42
+    },
+    {
+      "name": "T1-Monitoring",
+      "id": "t1-4e3c7a9d-0f5b-6c2d-1e8a-3f4a5b6c7d8e",
+      "rx_mb": 9876.54,
+      "tx_mb": 6543.21,
+      "total_mb": 16419.75,
+      "rx_packets": 145678901,
+      "tx_packets": 98765432,
+      "rx_rate_mbps": 33.01,
+      "tx_rate_mbps": 21.88,
+      "dropped_rx": 89,
+      "dropped_tx": 23
+    },
+    {
+      "name": "T1-Storage-Backup",
+      "id": "t1-5f4d8b0e-1a6c-7d3e-2f9b-4a5b6c7d8e9f",
+      "rx_mb": 25432.10,
+      "tx_mb": 18765.43,
+      "total_mb": 44197.53,
+      "rx_packets": 389012345,
+      "tx_packets": 287654321,
+      "rx_rate_mbps": 85.02,
+      "tx_rate_mbps": 62.73,
+      "dropped_rx": 567,
+      "dropped_tx": 123
+    },
+    {
+      "name": "T1-Web-Frontend",
+      "id": "t1-6a5e9c1f-2b7d-8e4f-3a0c-5b6c7d8e9f0a",
+      "rx_mb": 4567.89,
+      "tx_mb": 8901.23,
+      "total_mb": 13469.12,
+      "rx_packets": 67890123,
+      "tx_packets": 123456789,
+      "rx_rate_mbps": 15.27,
+      "tx_rate_mbps": 29.76,
+      "dropped_rx": 45,
+      "dropped_tx": 67
+    },
+    {
+      "name": "T1-API-Gateway",
+      "id": "t1-7b6f0a2d-3c8e-9f5a-4b1d-6c7d8e9f0a1b",
+      "rx_mb": 12345.67,
+      "tx_mb": 10987.65,
+      "total_mb": 23333.32,
+      "rx_packets": 187654321,
+      "tx_packets": 165432109,
+      "rx_rate_mbps": 41.28,
+      "tx_rate_mbps": 36.75,
+      "dropped_rx": 156,
+      "dropped_tx": 34
+    },
+    {
+      "name": "T1-DB-Replica",
+      "id": "t1-8c7a1b3e-4d9f-0a6b-5c2e-7d8e9f0a1b2c",
+      "rx_mb": 31234.56,
+      "tx_mb": 28765.43,
+      "total_mb": 59999.99,
+      "rx_packets": 478901234,
+      "tx_packets": 439012345,
+      "rx_rate_mbps": 104.44,
+      "tx_rate_mbps": 96.19,
+      "dropped_rx": 892,
+      "dropped_tx": 234
+    },
+    {
+      "name": "T1-Dev-Environment",
+      "id": "t1-9d8b2c4f-5e0a-1b7c-6d3f-8e9f0a1b2c3d",
+      "rx_mb": 543.21,
+      "tx_mb": 432.10,
+      "total_mb": 975.31,
+      "rx_packets": 7654321,
+      "tx_packets": 6543210,
+      "rx_rate_mbps": 1.82,
+      "tx_rate_mbps": 1.44,
+      "dropped_rx": 12,
+      "dropped_tx": 5
+    },
+    {
+      "name": "T1-Testing-Staging",
+      "id": "t1-0e9c3d5a-6f1b-2c8d-7e4a-9f0a1b2c3d4e",
+      "rx_mb": 234.56,
+      "tx_mb": 345.67,
+      "total_mb": 580.23,
+      "rx_packets": 3456789,
+      "tx_packets": 4567890,
+      "rx_rate_mbps": 0.78,
+      "tx_rate_mbps": 1.16,
+      "dropped_rx": 3,
+      "dropped_tx": 1
+    },
+    {
+      "name": "T1-Analytics-Pipeline",
+      "id": "t1-1f0a4e6b-7a2c-3d9e-8f5b-0a1b2c3d4e5f",
+      "rx_mb": 8765.43,
+      "tx_mb": 1234.56,
+      "total_mb": 9999.99,
+      "rx_packets": 123456789,
+      "tx_packets": 23456789,
+      "rx_rate_mbps": 29.31,
+      "tx_rate_mbps": 4.13,
+      "dropped_rx": 67,
+      "dropped_tx": 12
+    },
+    {
+      "name": "T1-Log-Collector",
+      "id": "t1-2a1b5f7c-8b3d-4e0f-9a6c-1b2c3d4e5f6a",
+      "rx_mb": 3456.78,
+      "tx_mb": 2109.87,
+      "total_mb": 5566.65,
+      "rx_packets": 56789012,
+      "tx_packets": 34567890,
+      "rx_rate_mbps": 11.56,
+      "tx_rate_mbps": 7.05,
+      "dropped_rx": 34,
+      "dropped_tx": 8
+    },
+    {
+      "name": "T1-CDN-Edge",
+      "id": "t1-3b2c6a8d-9c4e-5f1a-0b7d-2c3d4e5f6a7b",
+      "rx_mb": 65432.10,
+      "tx_mb": 78901.23,
+      "total_mb": 144333.33,
+      "rx_packets": 987654321,
+      "tx_packets": 1123456789,
+      "rx_rate_mbps": 218.82,
+      "tx_rate_mbps": 263.75,
+      "dropped_rx": 1234,
+      "dropped_tx": 567
+    },
+    {
+      "name": "T1-VPN-Connector",
+      "id": "t1-4c3d7b9e-0a5f-6b2c-1c8e-3d4e5f6a7b8c",
+      "rx_mb": 1234.56,
+      "tx_mb": 2345.67,
+      "total_mb": 3580.23,
+      "rx_packets": 23456789,
+      "tx_packets": 34567890,
+      "rx_rate_mbps": 4.13,
+      "tx_rate_mbps": 7.84,
+      "dropped_rx": 23,
+      "dropped_tx": 7
+    },
+    {
+      "name": "T1-Management",
+      "id": "t1-5d4e8c0a-1b6a-7c3d-2d9f-4e5f6a7b8c9d",
+      "rx_mb": 789.01,
+      "tx_mb": 678.90,
+      "total_mb": 1467.91,
+      "rx_packets": 12345678,
+      "tx_packets": 10987654,
+      "rx_rate_mbps": 2.64,
+      "tx_rate_mbps": 2.27,
+      "dropped_rx": 8,
+      "dropped_tx": 3
+    },
+    {
+      "name": "T1-DMZ-Public",
+      "id": "t1-6e5f9d1b-2c7a-8d4e-3a0b-5f6a7b8c9d0e",
+      "rx_mb": 23456.78,
+      "tx_mb": 19876.54,
+      "total_mb": 43333.32,
+      "rx_packets": 345678901,
+      "tx_packets": 298765432,
+      "rx_rate_mbps": 78.46,
+      "tx_rate_mbps": 66.47,
+      "dropped_rx": 345,
+      "dropped_tx": 89
+    }
+  ];
+
+  /* ─── DATA SOURCE ───
+     {{ rows }} is a Jinja2-like placeholder replaced by Python.
+     If not replaced (standalone demo), we fall back to DEMO_DATA.
+  */
+  var rowsSource = (function() {
+    var raw = '{{ rows }}';
+    // If the placeholder wasn't substituted, raw will contain '{{ rows }}'
+    if (raw.indexOf('{{') !== -1) {
+      return null; // signal to use demo data
+    }
+    try { return JSON.parse(raw); }
+    catch(e) { return null; }
+  })();
+
+  var data = rowsSource || DEMO_DATA;
+  var filteredData = [];
+  var currentSortCol = 'total';
+  var currentSortDir = 'desc';
+
+  /* ─── DOM refs ─── */
+  var tbody = document.getElementById('tableBody');
+  var searchInput = document.getElementById('searchInput');
+  var topSelect = document.getElementById('topSelect');
+  var exportBtn = document.getElementById('exportBtn');
+  var shownCount = document.getElementById('shownCount');
+  var totalCount2 = document.getElementById('totalCount2');
+  var totalCount = document.getElementById('totalCount');
+  var toast = document.getElementById('toast');
+
+  /* ─── Helpers ─── */
+  function fmtNum(n, decimals) {
+    if (decimals === undefined) decimals = 2;
+    var parts = Number(n).toFixed(decimals).split('.');
+    parts[0] = parts[0].replace(/\B(?=(\d{3})+(?!\d))/g, ',');
+    return parts.join('.');
+  }
+
+  function fmtInt(n) {
+    return Number(n).toLocaleString('en-US');
+  }
+
+  function getCellClass(col, val) {
+    if (col === 'total') return 'metric total';
+    if (col === 'dropped_rx' || col === 'dropped_tx') return 'metric danger';
+    if (col === 'rx_rate' || col === 'tx_rate') return 'metric positive';
+    return 'metric neutral';
+  }
+
+  /* ─── Render ─── */
+  function render() {
+    var query = searchInput.value.trim().toLowerCase();
+    var topVal = topSelect.value;
+
+    // filter by search
+    filteredData = data.filter(function(row) {
+      if (!query) return true;
+      return row.name.toLowerCase().indexOf(query) !== -1 ||
+             row.id.toLowerCase().indexOf(query) !== -1;
+    });
+
+    // sort
+    filteredData.sort(function(a, b) {
+      var dir = currentSortDir === 'asc' ? 1 : -1;
+      var va, vb;
+      switch (currentSortCol) {
+        case 'num': va = a._index; vb = b._index; break;
+        case 'name': va = a.name.toLowerCase(); vb = b.name.toLowerCase(); return va < vb ? -dir : va > vb ? dir : 0;
+        case 'rx': va = a.rx_mb; vb = b.rx_mb; break;
+        case 'tx': va = a.tx_mb; vb = b.tx_mb; break;
+        case 'total': va = a.total_mb; vb = b.total_mb; break;
+        case 'rx_packets': va = a.rx_packets; vb = b.rx_packets; break;
+        case 'tx_packets': va = a.tx_packets; vb = b.tx_packets; break;
+        case 'rx_rate': va = a.rx_rate_mbps; vb = b.rx_rate_mbps; break;
+        case 'tx_rate': va = a.tx_rate_mbps; vb = b.tx_rate_mbps; break;
+        case 'dropped_rx': va = a.dropped_rx; vb = b.dropped_rx; break;
+        case 'dropped_tx': va = a.dropped_tx; vb = b.dropped_tx; break;
+        default: return 0;
+      }
+      if (va < vb) return -dir;
+      if (va > vb) return dir;
+      return 0;
+    });
+
+    // apply top N
+    var limit = topVal === 'all' ? filteredData.length : parseInt(topVal, 10);
+    var displayData = filteredData.slice(0, limit);
+
+    // update counts
+    var totalD = data.length;
+    totalCount.textContent = totalD;
+    totalCount2.textContent = totalD;
+    shownCount.textContent = displayData.length;
+
+    // build rows
+    var html = '';
+    if (displayData.length === 0) {
+      html = '<tr class="empty-state"><td colspan="11"><div class="empty-state">' +
+             '<div class="icon">🔍</div><p>No T1 gateways match your search.</p></div></td></tr>';
+      tbody.innerHTML = html;
+      return;
+    }
+
+    for (var i = 0; i < displayData.length; i++) {
+      var r = displayData[i];
+      var rowClass = '';
+      if (r.total_mb > 1000) rowClass = 'row-critical';
+      else if (r.total_mb > 100) rowClass = 'row-warning';
+
+      html += '<tr class="' + rowClass + '">';
+      html += '<td class="num">' + (i + 1) + '</td>';
+      html += '<td class="name-cell"><span class="display-name">' + escHtml(r.name) + '</span><span class="t1-id">' + escHtml(r.id) + '</span></td>';
+      html += '<td class="' + getCellClass('rx', r.rx_mb) + '">' + fmtNum(r.rx_mb) + '</td>';
+      html += '<td class="' + getCellClass('tx', r.tx_mb) + '">' + fmtNum(r.tx_mb) + '</td>';
+      html += '<td class="' + getCellClass('total', r.total_mb) + '">' + fmtNum(r.total_mb) + '</td>';
+      html += '<td class="metric neutral">' + fmtInt(r.rx_packets) + '</td>';
+      html += '<td class="metric neutral">' + fmtInt(r.tx_packets) + '</td>';
+      html += '<td class="' + getCellClass('rx_rate', r.rx_rate_mbps) + '">' + fmtNum(r.rx_rate_mbps) + '</td>';
+      html += '<td class="' + getCellClass('tx_rate', r.tx_rate_mbps) + '">' + fmtNum(r.tx_rate_mbps) + '</td>';
+      html += '<td class="metric danger">' + fmtInt(r.dropped_rx) + '</td>';
+      html += '<td class="metric danger">' + fmtInt(r.dropped_tx) + '</td>';
+      html += '</tr>';
+    }
+
+    tbody.innerHTML = html;
+  }
+
+  /* simple escape */
+  function escHtml(s) {
+    var d = document.createElement('div');
+    d.appendChild(document.createTextNode(s));
+    return d.innerHTML;
+  }
+
+  /* ─── Sort click ─── */
+  function handleSortClick(e) {
+    var th = e.target.closest('th');
+    if (!th) return;
+    var col = th.getAttribute('data-col');
+    if (!col) return;
+
+    var headers = document.querySelectorAll('thead th');
+    headers.forEach(function(h) { h.classList.remove('sorted-asc', 'sorted-desc'); });
+
+    if (currentSortCol === col) {
+      currentSortDir = currentSortDir === 'asc' ? 'desc' : 'asc';
+    } else {
+      currentSortCol = col;
+      currentSortDir = 'desc';
+    }
+    th.classList.add(currentSortDir === 'asc' ? 'sorted-asc' : 'sorted-desc');
+    render();
+  }
+
+  /* ─── CSV Export ─── */
+  function exportCSV() {
+    // Use currently filtered & sorted data for export
+    var rows = filteredData.length ? filteredData : data;
+    var lines = [];
+    // header
+    lines.push(['#', 'T1 Name', 'T1 ID', 'RX (MB)', 'TX (MB)', 'Total (MB)',
+                'RX Packets', 'TX Packets', 'RX Rate (Mbps)', 'TX Rate (Mbps)',
+                'Dropped RX', 'Dropped TX'].join(','));
+
+    for (var i = 0; i < rows.length; i++) {
+      var r = rows[i];
+      var row = [
+        i + 1,
+        '"' + r.name + '"',
+        '"' + r.id + '"',
+        r.rx_mb.toFixed(2),
+        r.tx_mb.toFixed(2),
+        r.total_mb.toFixed(2),
+        r.rx_packets,
+        r.tx_packets,
+        r.rx_rate_mbps.toFixed(2),
+        r.tx_rate_mbps.toFixed(2),
+        r.dropped_rx,
+        r.dropped_tx
+      ];
+      lines.push(row.join(','));
+    }
+    var csv = lines.join('\n');
+
+    // try clipboard
+    if (navigator.clipboard && navigator.clipboard.writeText) {
+      navigator.clipboard.writeText(csv).then(function() {
+        showToast('✓ Copied to clipboard (' + rows.length + ' rows)');
+      }).catch(function() {
+        fallbackCopy(csv);
+      });
+    } else {
+      fallbackCopy(csv);
+    }
+  }
+
+  function fallbackCopy(text) {
+    var ta = document.createElement('textarea');
+    ta.value = text;
+    ta.style.position = 'fixed';
+    ta.style.left = '-9999px';
+    ta.style.top = '-9999px';
+    document.body.appendChild(ta);
+    ta.select();
+    try {
+      document.execCommand('copy');
+      showToast('✓ Copied to clipboard (' + filteredData.length + ' rows)');
+    } catch(e) {
+      // download as file
+      downloadCSV(text);
+    }
+    document.body.removeChild(ta);
+  }
+
+  function downloadCSV(csv) {
+    var blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+    var url = URL.createObjectURL(blob);
+    var a = document.createElement('a');
+    a.href = url;
+    a.download = 'nsx-t1-traffic-report.csv';
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+    showToast('✓ CSV file downloaded');
+  }
+
+  function showToast(msg) {
+    toast.textContent = msg;
+    toast.classList.add('show');
+    clearTimeout(toast._timer);
+    toast._timer = setTimeout(function() { toast.classList.remove('show'); }, 3000);
+  }
+
+  /* ─── Init ─── */
+  function init() {
+    // assign index for stable sorting
+    for (var i = 0; i < data.length; i++) {
+      data[i]._index = i;
+    }
+
+    // initial sort: Total desc
+    data.sort(function(a, b) { return b.total_mb - a.total_mb; });
+    // re-assign index after sort
+    for (var j = 0; j < data.length; j++) {
+      data[j]._index = j;
+    }
+
+    // mark default sorted column
+    var defaultTh = document.querySelector('th[data-col="total"]');
+    if (defaultTh) defaultTh.classList.add('sorted-desc');
+
+    // events
+    document.querySelector('thead').addEventListener('click', handleSortClick);
+    searchInput.addEventListener('input', render);
+    topSelect.addEventListener('change', render);
+    exportBtn.addEventListener('click', exportCSV);
+
+    render();
+  }
+
+  document.addEventListener('DOMContentLoaded', init);
+})();
+</script>
+
+</body>
+</html>

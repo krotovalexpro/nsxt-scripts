@@ -1,0 +1,19 @@
+# =============================================================================
+# NSX-T Monitor Configuration
+# =============================================================================
+# Copy this file as config.yaml next to nsx-monitor.py and update the values.
+#
+# Fields:
+#   nsx_url   — NSX-T Manager URL (e.g., https://nsx-manager.example.com)
+#   username  — API user with read access
+#   password  — API user password
+# =============================================================================
+
+nsx_url: "https://nsx-manager.example.com"
+username: "admin"
+password: "your-password-here"
+
+# Timeout in seconds для каждого HTTP-запроса к NSX Manager.
+# Если NSX медленный — увеличь. Можно указать одно число (connect+read)
+# или два: (connect, read).
+timeout: 300
