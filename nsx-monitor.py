@@ -1362,7 +1362,6 @@ def generate_edge_html_report(
     rows_html = ""
     for i, e in enumerate(sorted_list, 1):
         cluster = e.edge_cluster_name or "—"
-        preferred = ", ".join(e.preferred_edges) if e.preferred_edges else "—"
         active = e.ha_active_edge or "—"
         standby = e.ha_standby_edge or "—"
         mode = e.ha_mode or "—"
@@ -1377,7 +1376,6 @@ def generate_edge_html_report(
             f"  <td>{i}</td>\n"
             f"  <td>{e.name}</td>\n"
             f"  <td{cluster_cls}>{cluster}</td>\n"
-            f"  <td>{preferred}</td>\n"
             f"  <td{active_style}>{active}</td>\n"
             f"  <td{standby_style}>{standby}</td>\n"
             f"  <td>{mode}</td>\n"
@@ -1518,7 +1516,6 @@ def generate_edge_html_report(
         <th data-col="num" data-numeric="true">#</th>
         <th data-col="name">T1 Name</th>
         <th data-col="cluster">Edge Cluster</th>
-        <th data-col="edges">Preferred Edges</th>
         <th data-col="active">Active Edge</th>
         <th data-col="standby">Standby Edge</th>
         <th data-col="mode">HA Mode</th>

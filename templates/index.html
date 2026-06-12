@@ -328,14 +328,13 @@
               <th data-col="num">#</th>
               <th data-col="name">T1 Name</th>
               <th data-col="cluster">Edge Cluster</th>
-              <th data-col="edges">Preferred Edges</th>
               <th data-col="active">Active Edge</th>
               <th data-col="standby">Standby Edge</th>
               <th data-col="mode">HA Mode</th>
             </tr>
           </thead>
           <tbody id="edge-tbody">
-            <tr><td colspan="7" style="text-align:center;color:#6c757d;padding:40px">Нажмите "Collect" для загрузки данных</td></tr>
+            <tr><td colspan="6" style="text-align:center;color:#6c757d;padding:40px">Нажмите "Collect" для загрузки данных</td></tr>
           </tbody>
         </table>
       </div>
@@ -536,7 +535,7 @@ function renderEdgeTable(data) {
   const results = document.getElementById('edge-results');
 
   if (!data.length) {
-    tbody.innerHTML = '<tr><td colspan="7" style="text-align:center;color:#6c757d;padding:40px">Нет данных</td></tr>';
+    tbody.innerHTML = '<tr><td colspan="6" style="text-align:center;color:#6c757d;padding:40px">Нет данных</td></tr>';
     results.style.display = 'block';
     return;
   }
@@ -559,10 +558,6 @@ function renderEdgeTable(data) {
         if (!va && !vb) return 0;
         if (!va) return 1;
         if (!vb) return -1;
-        return edgeSortDir === 'asc' ? va.localeCompare(vb) : vb.localeCompare(va);
-      case 'edges':
-        va = ((a.preferred_edges || []).join(', ')).toLowerCase();
-        vb = ((b.preferred_edges || []).join(', ')).toLowerCase();
         return edgeSortDir === 'asc' ? va.localeCompare(vb) : vb.localeCompare(va);
       case 'active':
         va = (a.ha_active_edge || '').toLowerCase();
@@ -591,7 +586,6 @@ function renderEdgeTable(data) {
   for (var i = 0; i < data.length; i++) {
     var e = data[i];
     var cluster = e.edge_cluster_name || '—';
-    var preferred = (e.preferred_edges && e.preferred_edges.length) ? e.preferred_edges.join(', ') : '—';
     var active = e.ha_active_edge || '—';
     var standby = e.ha_standby_edge || '—';
     var mode = e.ha_mode || '—';
@@ -603,7 +597,6 @@ function renderEdgeTable(data) {
     html += '<td>' + (i + 1) + '</td>';
     html += '<td>' + escHtml(e.display_name || e.id) + '</td>';
     html += '<td' + (e.edge_cluster_name ? ' style="border-left:3px solid #0d6efd"' : '') + '>' + escHtml(cluster) + '</td>';
-    html += '<td>' + escHtml(preferred) + '</td>';
     html += '<td' + activeStyle + '>' + escHtml(active) + '</td>';
     html += '<td' + standbyStyle + '>' + escHtml(standby) + '</td>';
     html += '<td>' + escHtml(mode) + '</td>';
@@ -647,7 +640,7 @@ function exportEdgeCSV() {
   if (!edgeData.length) return;
 
   var lines = [];
-  lines.push(['#', 'T1 Name', 'Edge Cluster', 'Preferred Edges', 'Active Edge', 'Standby Edge', 'HA Mode'].join(','));
+  lines.push(['#', 'T1 Name', 'Edge Cluster', 'Active Edge', 'Standby Edge', 'HA Mode'].join(','));
 
   for (var i = 0; i < edgeData.length; i++) {
     var e = edgeData[i];
@@ -655,7 +648,6 @@ function exportEdgeCSV() {
       i + 1,
       '"' + (e.display_name || e.id) + '"',
       '"' + (e.edge_cluster_name || '') + '"',
-      '"' + ((e.preferred_edges || []).join('; ')) + '"',
       '"' + (e.ha_active_edge || '') + '"',
       '"' + (e.ha_standby_edge || '') + '"',
       '"' + (e.ha_mode || '') + '"',
