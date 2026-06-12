@@ -782,9 +782,17 @@ class NSXMonitor:
             ha_standby = ""
             ha_mode = ""
 
+            # Match T1 to logical router: first by display_name, then by partial id
             lr = lr_by_name.get(display_name)
-            if lr:
-                status = ha_statuses.get(display_name)
+            if not lr:
+                for dn, candidate in lr_by_name.items():
+                    if t1_id in dn or dn in t1_id:
+                        lr = candidate
+                        break
+
+            lr_key = lr.get("display_name", "") if lr else ""
+            if lr and lr_key:
+                status = ha_statuses.get(lr_key)
                 if status:
                     tn_statuses = status.get("transport_node_statuses", [])
                     for tn_s in tn_statuses:
@@ -797,6 +805,14 @@ class NSXMonitor:
                             ha_standby = tn_name
                     if tn_statuses:
                         ha_mode = "ACTIVE_STANDBY"
+
+            # If locale-services didn't provide preferred edges but HA
+            # status shows active edges — use those (auto-assigned case)
+            if not preferred_edges:
+                if ha_active:
+                    preferred_edges.append(ha_active)
+                if ha_standby:
+                    preferred_edges.append(ha_standby)
 
             result.append(T1EdgeInfo(
                 t1_id=t1_id,
@@ -1254,13 +1270,13 @@ def generate_edge_html_report(
         active_style = " style='color:#3fb950;font-weight:600'" if e.ha_active_edge else ""
         standby_style = " style='color:#8b949e'" if e.ha_standby_edge else ""
 
-        cluster_bg = " style='background:#f0f6ff'" if e.edge_cluster_name else ""
+        cluster_cls = " class='cluster'" if e.edge_cluster_name else ""
 
         rows_html += (
             f"<tr>\n"
             f"  <td>{i}</td>\n"
             f"  <td>{e.name}</td>\n"
-            f"  <td{cluster_bg}>{cluster}</td>\n"
+            f"  <td{cluster_cls}>{cluster}</td>\n"
             f"  <td>{preferred}</td>\n"
             f"  <td{active_style}>{active}</td>\n"
             f"  <td{standby_style}>{standby}</td>\n"
@@ -1349,7 +1365,7 @@ def generate_edge_html_report(
   tr:nth-child(even) td {{ background: #0d1117; }}
   tr:nth-child(odd) td {{ background: #161b22; }}
 
-  .mono {{ font-family: 'SF Mono', 'Consolas', 'Liberation Mono', monospace; font-size: 12px; }}
+  .cluster {{ border-left: 3px solid #58a6ff; }}
 
   .footer {{
     text-align: center;

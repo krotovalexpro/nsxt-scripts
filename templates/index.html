@@ -516,7 +516,7 @@ function renderEdgeTable(data) {
     html += '<tr>';
     html += '<td>' + (i + 1) + '</td>';
     html += '<td>' + escHtml(e.display_name || e.id) + '</td>';
-    html += '<td' + (e.edge_cluster_name ? ' style="background:#1a3a1a"' : '') + '>' + escHtml(cluster) + '</td>';
+    html += '<td' + (e.edge_cluster_name ? ' style="border-left:3px solid #58a6ff"' : '') + '>' + escHtml(cluster) + '</td>';
     html += '<td>' + escHtml(preferred) + '</td>';
     html += '<td' + activeStyle + '>' + escHtml(active) + '</td>';
     html += '<td' + standbyStyle + '>' + escHtml(standby) + '</td>';
