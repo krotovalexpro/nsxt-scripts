@@ -1090,7 +1090,6 @@ def generate_html_report(
         edge_extra_header = (
             '            <th class="sortable">Edge Cluster</th>\n'
             '            <th class="sortable">Active Edge</th>\n'
-            '            <th class="sortable">HA Mode</th>\n'
         )
 
     # --- Build table rows ------------------------------------------------
@@ -1116,17 +1115,15 @@ def generate_html_report(
             if ei and ei.edge_cluster_name:
                 ec = ei.edge_cluster_name
                 active = ei.ha_active_edge or "—"
-                ha = ei.ha_mode or "—"
                 active_style = ""
                 if ei.ha_active_edge:
                     active_style = " style='color:#3fb950;font-weight:600'"
                 edge_cells = (
                     f"  <td>{ec}</td>\n"
                     f"  <td{active_style}>{active}</td>\n"
-                    f"  <td>{ha}</td>\n"
                 )
             else:
-                edge_cells = "  <td>—</td>\n  <td>—</td>\n  <td>—</td>\n"
+                edge_cells = "  <td>—</td>\n  <td>—</td>\n"
 
         col_span_extra = "3" if edge_columns else ""
 
