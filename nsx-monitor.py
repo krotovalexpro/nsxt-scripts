@@ -708,43 +708,47 @@ class NSXMonitor:
         if not status:
             return ha_active, ha_standby, ha_mode
 
-        # Format 1: transport_node_statuses / per_transport_node_status (NSX-T 3.x)
-        tn_statuses = (
-            status.get("transport_node_statuses")
-            or status.get("per_transport_node_status")
-            or []
-        )
-        if isinstance(tn_statuses, list) and tn_statuses:
-            for tn_s in tn_statuses:
-                tn_id = tn_s.get("transport_node_id", "")
+        # Format 1: per_node_status (NSX 4.x)
+        per_node = status.get("per_node_status", [])
+        if isinstance(per_node, list) and per_node:
+            for pns in per_node:
+                tn_id = pns.get("transport_node_id", "")
                 tn_name = tn_map.get(tn_id, tn_id)
-                role = tn_s.get("ha_role", "") or tn_s.get("role", "")
+                role = pns.get("high_availability_status", "")
                 if role == "ACTIVE":
                     ha_active = tn_name
-                elif role == "STANDBY" or role == "STANDBY_FOR_SITE":
+                elif role == "STANDBY":
                     ha_standby = tn_name
-            if tn_statuses:
+            if ha_active or ha_standby:
                 ha_mode = "ACTIVE_STANDBY"
 
-        # Format 2: service_router_id (NSX 4.x — the active SR UUID)
+        # Format 2: transport_node_statuses (NSX-T 3.x)
+        if not ha_active:
+            tn_statuses = status.get("transport_node_statuses", [])
+            if isinstance(tn_statuses, list):
+                for tn_s in tn_statuses:
+                    tn_id = tn_s.get("transport_node_id", "")
+                    tn_name = tn_map.get(tn_id, tn_id)
+                    role = tn_s.get("ha_role", "")
+                    if role == "ACTIVE":
+                        ha_active = tn_name
+                    elif role == "STANDBY":
+                        ha_standby = tn_name
+                if tn_statuses and (ha_active or ha_standby):
+                    ha_mode = "ACTIVE_STANDBY"
+
+        # Format 3: service_router_id (NSX 4.x fallback)
         if not ha_active:
             sr_id = status.get("service_router_id", "")
             if sr_id:
                 ha_active = tn_map.get(sr_id, sr_id)
                 ha_mode = status.get("high_availability_mode", "ACTIVE_STANDBY")
 
-        # Format 3: transport_node_id (singular, flat format)
-        if not ha_active:
-            tn_id = status.get("transport_node_id", "")
-            if tn_id:
-                ha_active = tn_map.get(tn_id, tn_id)
-                has_standby_ids = bool(status.get("standby_transport_node_ids"))
-                ha_mode = "ACTIVE_STANDBY" if has_standby_ids else ""
-
-        # Format 4: high_availability_status with standalone nodes
-        ha_status_str = status.get("high_availability_status", "")
-        if not ha_mode and ha_status_str:
-            ha_mode = "ACTIVE_STANDBY"
+        # Format 4: high_availability_status (overall)
+        if not ha_mode:
+            ha_status_str = status.get("high_availability_status", "")
+            if ha_status_str:
+                ha_mode = "ACTIVE_STANDBY"
 
         return ha_active, ha_standby, ha_mode
 
@@ -808,15 +812,16 @@ class NSXMonitor:
         logical_routers = lr_data.get("results") or [] if lr_data else []
         log.debug("Fetched %d logical routers (TIER1)", len(logical_routers))
 
-        lr_by_name: dict[str, dict] = {}
-        lr_by_id: dict[str, dict] = {}
+        # Index LRs by edge_cluster_id (from user's data: LR has `edge_cluster_id`)
+        lr_by_cluster: dict[str, list[dict]] = {}
+        lr_by_name_global: dict[str, dict] = {}
         for lr in logical_routers:
             dn = lr.get("display_name", "")
-            lid = lr.get("id", "")
+            ec_id = lr.get("edge_cluster_id", "")
             if dn:
-                lr_by_name[dn] = lr
-            if lid:
-                lr_by_id[lid] = lr
+                lr_by_name_global[dn] = lr
+                if ec_id:
+                    lr_by_cluster.setdefault(ec_id, []).append(lr)
 
         # Collect HA statuses (parallel)
         ha_statuses: dict[str, dict] = {}
@@ -841,29 +846,6 @@ class NSXMonitor:
                     pass
         log.debug("HA statuses collected for %d logical routers", len(ha_statuses))
 
-        # Also fetch LR details for fallback standby via transport_node_ids (parallel)
-        lr_details: dict[str, dict] = {}
-        with ThreadPoolExecutor(max_workers=max_workers) as pool:
-            fut_map = {}
-            for lr in logical_routers:
-                dn = lr.get("display_name", "")
-                if dn and lr.get("id"):
-                    fut = pool.submit(
-                        self._get,
-                        f"/api/v1/logical-routers/{lr['id']}",
-                    )
-                    fut_map[fut] = dn
-
-            for future in as_completed(fut_map):
-                dn = fut_map[future]
-                try:
-                    data = future.result()
-                    if data:
-                        lr_details[dn] = data
-                except Exception:
-                    pass
-        log.debug("LR details collected for %d logical routers", len(lr_details))
-
         # --- 4. Build T1EdgeInfo objects ---
         result: list[T1EdgeInfo] = []
         for t1 in tier1s:
@@ -872,6 +854,7 @@ class NSXMonitor:
 
             # Locale-services → edge cluster + preferred edges
             edge_cluster_name = ""
+            t1_ec_id = ""
             preferred_edges: list[str] = []
 
             services = ls_map.get(t1_id, [])
@@ -879,8 +862,8 @@ class NSXMonitor:
                 ls = services[0]
                 ec_path = ls.get("edge_cluster_path", "")
                 if ec_path:
-                    ec_id = ec_path.strip("/").split("/")[-1]
-                    edge_cluster_name = ec_map.get(ec_id, ec_id)
+                    t1_ec_id = ec_path.strip("/").split("/")[-1]
+                    edge_cluster_name = ec_map.get(t1_ec_id, t1_ec_id)
 
                 for edge_path in ls.get("preferred_edge_paths", []):
                     tn_id = edge_path.strip("/").split("/")[-1]
@@ -888,14 +871,31 @@ class NSXMonitor:
                     if tn_name != tn_id or not edge_cluster_name:
                         preferred_edges.append(tn_name)
 
-            # Match T1 to logical router
-            lr = lr_by_name.get(display_name)
+            # Match T1 to logical router by edge_cluster_id + display_name
+            lr = None
+            candidates = lr_by_cluster.get(t1_ec_id, []) if t1_ec_id else []
+
+            # 1) Exact display_name match within same edge cluster
+            for c in candidates:
+                if c.get("display_name") == display_name:
+                    lr = c
+                    break
+
+            # 2) Partial id match within same edge cluster
             if not lr:
-                for dn, candidate in lr_by_name.items():
+                for c in candidates:
+                    dn = c.get("display_name", "")
                     if t1_id in dn or dn in t1_id:
-                        lr = candidate
-                        log.debug("T1 '%s' matched LR by partial id: '%s'", display_name, dn)
+                        lr = c
+                        log.debug("T1 '%s' matched LR '%s' by partial id in cluster '%s'",
+                                  display_name, dn, t1_ec_id)
                         break
+
+            # 3) Fallback: global match by display_name (any cluster)
+            if not lr:
+                lr = lr_by_name_global.get(display_name)
+                if lr:
+                    log.debug("T1 '%s' matched LR globally (no cluster filter)", display_name)
 
             lr_key = lr.get("display_name", "") if lr else ""
             ha_active = ""
@@ -904,23 +904,9 @@ class NSXMonitor:
 
             if lr and lr_key:
                 status = ha_statuses.get(lr_key)
+                if not status:
+                    log.debug("T1 '%s': no HA status found for LR '%s'", display_name, lr_key)
                 ha_active, ha_standby, ha_mode = self._resolve_ha_from_status(status, tn_map)
-
-                # Fallback: use LR detail transport_node_ids for standby
-                if not ha_standby:
-                    lr_detail = lr_details.get(lr_key)
-                    if lr_detail:
-                        tn_ids = lr_detail.get("transport_node_ids", [])
-                        if not ha_active and tn_ids:
-                            ha_active = tn_map.get(tn_ids[0], tn_ids[0])
-                        if not ha_standby:
-                            for tn_id in tn_ids:
-                                tn_name = tn_map.get(tn_id, tn_id)
-                                if tn_name and tn_name != ha_active:
-                                    ha_standby = tn_name
-                                    break
-                        if tn_ids and not ha_mode:
-                            ha_mode = lr_detail.get("high_availability_mode", "ACTIVE_STANDBY")
 
             # If preferred_edges empty but we have HA edges — use those
             if not preferred_edges:
