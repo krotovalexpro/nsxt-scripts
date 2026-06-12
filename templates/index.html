@@ -46,6 +46,15 @@
   .tab-content { display: none; }
   .tab-content.active { display: block; }
 
+  /* Edge table sort indicators */
+  #edge-table th {
+    cursor: pointer;
+    user-select: none;
+  }
+  #edge-table th:hover { color: #f0f6fc; background: #212a3e; }
+  #edge-table th.sorted-asc::after { content: ' ▲'; font-size: 10px; color: #58a6ff; }
+  #edge-table th.sorted-desc::after { content: ' ▼'; font-size: 10px; color: #58a6ff; }
+
   /* Cards */
   .card {
     background: #161b22;
@@ -483,6 +492,9 @@ function renderEdgeSummary(data) {
   document.getElementById('edge-summary').style.display = 'block';
 }
 
+var edgeSortCol = 'cluster';
+var edgeSortDir = 'asc';
+
 function renderEdgeTable(data) {
   const tbody = document.getElementById('edge-tbody');
   const results = document.getElementById('edge-results');
@@ -493,12 +505,50 @@ function renderEdgeTable(data) {
     return;
   }
 
-  // Sort: with edge cluster first, then by name
+  // Sort by current column
   data.sort(function(a, b) {
-    var ac = a.edge_cluster_name ? 0 : 1;
-    var bc = b.edge_cluster_name ? 0 : 1;
-    if (ac !== bc) return ac - bc;
-    return (a.display_name || a.id).localeCompare(b.display_name || b.id);
+    var va, vb;
+    switch (edgeSortCol) {
+      case 'num':
+        va = data.indexOf(a); vb = data.indexOf(b);
+        break;
+      case 'name':
+        va = (a.display_name || a.id).toLowerCase();
+        vb = (b.display_name || b.id).toLowerCase();
+        return edgeSortDir === 'asc' ? va.localeCompare(vb) : vb.localeCompare(va);
+      case 'cluster':
+        va = (a.edge_cluster_name || '').toLowerCase();
+        vb = (b.edge_cluster_name || '').toLowerCase();
+        // Empty clusters sort last
+        if (!va && !vb) return 0;
+        if (!va) return 1;
+        if (!vb) return -1;
+        return edgeSortDir === 'asc' ? va.localeCompare(vb) : vb.localeCompare(va);
+      case 'edges':
+        va = ((a.preferred_edges || []).join(', ')).toLowerCase();
+        vb = ((b.preferred_edges || []).join(', ')).toLowerCase();
+        return edgeSortDir === 'asc' ? va.localeCompare(vb) : vb.localeCompare(va);
+      case 'active':
+        va = (a.ha_active_edge || '').toLowerCase();
+        vb = (b.ha_active_edge || '').toLowerCase();
+        if (!va && !vb) return 0;
+        if (!va) return 1;
+        if (!vb) return -1;
+        return edgeSortDir === 'asc' ? va.localeCompare(vb) : vb.localeCompare(va);
+      case 'standby':
+        va = (a.ha_standby_edge || '').toLowerCase();
+        vb = (b.ha_standby_edge || '').toLowerCase();
+        return edgeSortDir === 'asc' ? va.localeCompare(vb) : vb.localeCompare(va);
+      case 'mode':
+        va = (a.ha_mode || '').toLowerCase();
+        vb = (b.ha_mode || '').toLowerCase();
+        return edgeSortDir === 'asc' ? va.localeCompare(vb) : vb.localeCompare(va);
+      default: return 0;
+    }
+    // numeric comparison
+    if (va < vb) return edgeSortDir === 'asc' ? -1 : 1;
+    if (va > vb) return edgeSortDir === 'asc' ? 1 : -1;
+    return 0;
   });
 
   var html = '';
@@ -526,7 +576,36 @@ function renderEdgeTable(data) {
 
   tbody.innerHTML = html;
   results.style.display = 'block';
+
+  // Update sort indicators
+  document.querySelectorAll('#edge-table th').forEach(function(th) {
+    th.classList.remove('sorted-asc', 'sorted-desc');
+    if (th.getAttribute('data-col') === edgeSortCol) {
+      th.classList.add(edgeSortDir === 'asc' ? 'sorted-asc' : 'sorted-desc');
+    }
+  });
 }
+
+// Edge table sort click handler
+function initEdgeSort() {
+  document.querySelector('#edge-table thead').addEventListener('click', function(e) {
+    var th = e.target.closest('th');
+    if (!th) return;
+    var col = th.getAttribute('data-col');
+    if (!col) return;
+
+    if (edgeSortCol === col) {
+      edgeSortDir = edgeSortDir === 'asc' ? 'desc' : 'asc';
+    } else {
+      edgeSortCol = col;
+      edgeSortDir = col === 'num' ? 'asc' : 'desc';
+    }
+    renderEdgeTable(edgeData);
+  });
+}
+
+// Init sort on first render
+document.addEventListener('DOMContentLoaded', initEdgeSort);
 
 function exportEdgeCSV() {
   if (!edgeData.length) return;
