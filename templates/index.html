@@ -47,13 +47,25 @@
   .tab-content.active { display: block; }
 
   /* Edge table sort indicators */
+  #edge-table { font-size: 13px; }
   #edge-table th {
     cursor: pointer;
     user-select: none;
+    font-size: 12px;
+    padding: 11px 12px;
+    text-align: left;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.4px;
+    white-space: nowrap;
+    border-bottom: 2px solid #d0d7de;
   }
   #edge-table th:hover { color: #16213e; background: #e9ecef; }
   #edge-table th.sorted-asc::after { content: ' ▲'; font-size: 10px; color: #0d6efd; }
   #edge-table th.sorted-desc::after { content: ' ▼'; font-size: 10px; color: #0d6efd; }
+  #edge-table td { padding: 9px 12px; border-bottom: 1px solid #e9ecef; vertical-align: middle; }
+  #edge-table tbody tr:hover td { background: #f6f8fa; }
+  #edge-table tbody tr:nth-child(even) td { background: #fafbfc; }
 
   /* Cards */
   .card {
