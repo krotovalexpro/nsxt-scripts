@@ -1114,7 +1114,7 @@ def generate_html_report(
             ei = edge_map.get(d.t1_id)
             if ei and ei.edge_cluster_name:
                 ec = ei.edge_cluster_name
-                active = ei.ha_active_edge or "—"
+                active = (ei.ha_active_edge or "—").split(".")[0]
                 active_style = ""
                 if ei.ha_active_edge:
                     active_style = " style='color:#22863a;font-weight:600'"
@@ -1362,8 +1362,8 @@ def generate_edge_html_report(
     rows_html = ""
     for i, e in enumerate(sorted_list, 1):
         cluster = e.edge_cluster_name or "—"
-        active = e.ha_active_edge or "—"
-        standby = e.ha_standby_edge or "—"
+        active = (e.ha_active_edge or "—").split(".")[0]
+        standby = (e.ha_standby_edge or "—").split(".")[0]
         mode = e.ha_mode or "—"
 
         active_style = " style='color:#22863a;font-weight:600'" if e.ha_active_edge else ""
@@ -1831,8 +1831,8 @@ def handle_edge_map(monitor: NSXMonitor, args: argparse.Namespace):
     print("  " + "─" * 120)
     for e in sorted_show:
         cluster = e.edge_cluster_name or "—"
-        active = e.ha_active_edge or "—"
-        standby = e.ha_standby_edge or "—"
+        active = (e.ha_active_edge or "—").split(".")[0]
+        standby = (e.ha_standby_edge or "—").split(".")[0]
         mode = e.ha_mode or "—"
         print(f"  {e.name:<30} {cluster:<20} {active:<25} {standby:<25} {mode:<14}")
 

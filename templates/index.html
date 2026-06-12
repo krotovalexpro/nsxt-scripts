@@ -394,6 +394,12 @@ let edgeTaskId = null;
 let edgePollInterval = null;
 let edgeData = [];
 
+function shortName(n) {
+  if (!n) return n;
+  var dot = n.indexOf('.');
+  return dot > 0 ? n.substring(0, dot) : n;
+}
+
 async function runEdgeMap() {
   const select = document.getElementById('edge-nsx-select');
   const nsxName = select.value;
@@ -507,7 +513,7 @@ function populateEdgeFilter(data) {
       seen[edge] = true;
       var opt = document.createElement('option');
       opt.value = edge;
-      opt.textContent = edge;
+      opt.textContent = shortName(edge);
       select.appendChild(opt);
     }
   });
@@ -598,8 +604,8 @@ function renderEdgeTable(data) {
   for (var i = 0; i < data.length; i++) {
     var e = data[i];
     var cluster = e.edge_cluster_name || '—';
-    var active = e.ha_active_edge || '—';
-    var standby = e.ha_standby_edge || '—';
+    var active = shortName(e.ha_active_edge) || '—';
+    var standby = shortName(e.ha_standby_edge) || '—';
     var mode = e.ha_mode || '—';
 
     var activeStyle = e.ha_active_edge ? ' style="color:#22863a;font-weight:600"' : '';
@@ -660,8 +666,8 @@ function exportEdgeCSV() {
       i + 1,
       '"' + (e.display_name || e.id) + '"',
       '"' + (e.edge_cluster_name || '') + '"',
-      '"' + (e.ha_active_edge || '') + '"',
-      '"' + (e.ha_standby_edge || '') + '"',
+      '"' + (shortName(e.ha_active_edge) || '') + '"',
+      '"' + (shortName(e.ha_standby_edge) || '') + '"',
       '"' + (e.ha_mode || '') + '"',
     ];
     lines.push(row.join(','));
