@@ -1684,6 +1684,17 @@ def handle_report(monitor: NSXMonitor, args: argparse.Namespace):
     all_ids = {s.t1_id for s in snap1_list} | {s.t1_id for s in snap2_list}
     errors = len(all_ids) - len(deltas)
 
+    # Optional: collect edge info for report columns
+    edge_map: dict[str, T1EdgeInfo] = {}
+    if args.with_edge_info:
+        log.info("Collecting edge placement info…")
+        try:
+            edge_list = monitor.collect_t1_edge_placement(max_workers=args.workers)
+            edge_map = {e.t1_id: e for e in edge_list}
+            log.info("Edge placement: %d T1s collected", len(edge_list))
+        except Exception as exc:
+            log.warning("Edge placement collection failed: %s", exc)
+
     report_path = _generate_and_save_report(
         deltas=deltas,
         total_t1s=len(all_ids),
@@ -1692,6 +1703,7 @@ def handle_report(monitor: NSXMonitor, args: argparse.Namespace):
         snap1_ts=snap1_ts,
         snap2_ts=snap2_ts,
         output_path=args.output,
+        edge_map=edge_map if edge_map else None,
     )
 
     print(f"\nReport: {report_path}")

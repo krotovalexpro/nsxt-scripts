@@ -181,12 +181,13 @@ def _run_monitor(task: TaskState, conn: dict, minutes: int, t1_name: str = ""):
             task.progress = f"Phase 2/2: Waiting {mins}m {secs:02d}s…"
             time.sleep(min(10, remaining))
 
-        # Phase 3: report
+        # Phase 3: report (with edge info)
         task.progress = "Phase 3/3: Collecting final snapshot and generating report…"
         result = subprocess.run(
             [
                 sys.executable, str(MONITOR_SCRIPT),
                 "--report", "--snapshot-file", snap_file,
+                "--with-edge-info",
                 "--output", str(report_path),
                 "--config", str(config_path),
                 "--workers", "8",
