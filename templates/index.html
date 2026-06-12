@@ -8,40 +8,40 @@
   * { margin: 0; padding: 0; box-sizing: border-box; }
   body {
     font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
-    background: #0d1117;
-    color: #e6edf3;
+    background: #f0f2f5;
+    color: #1a1a2e;
     min-height: 100vh;
   }
-  .container { max-width: 1200px; margin: 0 auto; padding: 24px; }
+  .container { max-width: 1600px; margin: 0 auto; padding: 24px; }
   h1 {
     font-size: 24px;
     margin-bottom: 4px;
-    color: #f0f6fc;
+    color: #16213e;
   }
-  .subtitle { color: #8b949e; font-size: 14px; margin-bottom: 24px; }
+  .subtitle { color: #6c757d; font-size: 14px; margin-bottom: 24px; }
 
   /* ── Tabs ── */
   .tabs {
     display: flex;
     gap: 0;
     margin-bottom: 20px;
-    border-bottom: 1px solid #30363d;
+    border-bottom: 1px solid #d0d7de;
   }
   .tab-btn {
     background: none;
     border: none;
     border-bottom: 2px solid transparent;
-    color: #8b949e;
+    color: #6c757d;
     padding: 10px 20px;
     font-size: 14px;
     font-weight: 500;
     cursor: pointer;
     transition: color 0.2s, border-color 0.2s;
   }
-  .tab-btn:hover { color: #f0f6fc; }
+  .tab-btn:hover { color: #1a1a2e; }
   .tab-btn.active {
-    color: #f0f6fc;
-    border-bottom-color: #58a6ff;
+    color: #16213e;
+    border-bottom-color: #0d6efd;
   }
   .tab-content { display: none; }
   .tab-content.active { display: block; }
@@ -51,21 +51,22 @@
     cursor: pointer;
     user-select: none;
   }
-  #edge-table th:hover { color: #f0f6fc; background: #212a3e; }
-  #edge-table th.sorted-asc::after { content: ' ▲'; font-size: 10px; color: #58a6ff; }
-  #edge-table th.sorted-desc::after { content: ' ▼'; font-size: 10px; color: #58a6ff; }
+  #edge-table th:hover { color: #16213e; background: #e9ecef; }
+  #edge-table th.sorted-asc::after { content: ' ▲'; font-size: 10px; color: #0d6efd; }
+  #edge-table th.sorted-desc::after { content: ' ▼'; font-size: 10px; color: #0d6efd; }
 
   /* Cards */
   .card {
-    background: #161b22;
-    border: 1px solid #30363d;
+    background: #ffffff;
+    border: 1px solid #d0d7de;
     border-radius: 8px;
     padding: 20px;
     margin-bottom: 16px;
+    box-shadow: 0 1px 3px rgba(0,0,0,0.04);
   }
   .card h2 {
     font-size: 16px;
-    color: #f0f6fc;
+    color: #16213e;
     margin-bottom: 12px;
   }
 
@@ -80,22 +81,22 @@
   .form-group { display: flex; flex-direction: column; gap: 4px; }
   .form-group label {
     font-size: 11px;
-    color: #8b949e;
+    color: #6c757d;
     text-transform: uppercase;
     letter-spacing: 0.5px;
   }
   select, input[type="text"], input[type="password"], input[type="number"] {
-    background: #0d1117;
-    border: 1px solid #30363d;
+    background: #ffffff;
+    border: 1px solid #d0d7de;
     border-radius: 6px;
-    color: #e6edf3;
+    color: #1a1a2e;
     padding: 8px 12px;
     font-size: 14px;
     min-width: 200px;
     outline: none;
-    transition: border-color 0.2s;
+    transition: border-color 0.2s, box-shadow 0.2s;
   }
-  select:focus, input:focus { border-color: #58a6ff; }
+  select:focus, input:focus { border-color: #0d6efd; box-shadow: 0 0 0 3px rgba(13,110,253,0.12); }
 
   .btn {
     display: inline-flex;
@@ -107,16 +108,16 @@
     font-size: 14px;
     font-weight: 500;
     cursor: pointer;
-    transition: background 0.2s;
+    transition: background 0.2s, box-shadow 0.2s;
     text-decoration: none;
   }
-  .btn-primary { background: #238636; color: #fff; }
-  .btn-primary:hover { background: #2ea043; }
-  .btn-primary:disabled { background: #1a5a2a; opacity: 0.6; cursor: not-allowed; }
-  .btn-danger { background: #da3633; color: #fff; }
-  .btn-danger:hover { background: #f85149; }
-  .btn-secondary { background: #21262d; color: #e6edf3; border: 1px solid #30363d; }
-  .btn-secondary:hover { background: #30363d; }
+  .btn-primary { background: #0d6efd; color: #fff; }
+  .btn-primary:hover { background: #0b5ed7; }
+  .btn-primary:disabled { background: #6c9fd8; opacity: 0.7; cursor: not-allowed; }
+  .btn-danger { background: #dc3545; color: #fff; }
+  .btn-danger:hover { background: #bb2d3b; }
+  .btn-secondary { background: #f0f2f5; color: #24292f; border: 1px solid #d0d7de; }
+  .btn-secondary:hover { background: #e1e4e8; }
 
   /* Add NSX form — hidden by default */
   #add-form { display: none; margin-top: 12px; }
@@ -125,26 +126,26 @@
   /* Status */
   #status { margin-top: 16px; }
   .status-box {
-    background: #0d1117;
-    border: 1px solid #30363d;
+    background: #ffffff;
+    border: 1px solid #d0d7de;
     border-radius: 6px;
     padding: 16px;
     margin-bottom: 12px;
   }
-  .status-box .nsx-name { color: #58a6ff; font-weight: 600; }
-  .status-box .label { color: #8b949e; font-size: 12px; }
-  .status-box .value { color: #e6edf3; font-family: monospace; margin-top: 4px; }
+  .status-box .nsx-name { color: #0d6efd; font-weight: 600; }
+  .status-box .label { color: #6c757d; font-size: 12px; }
+  .status-box .value { color: #1a1a2e; font-family: monospace; margin-top: 4px; }
   .progress-bar {
     width: 100%;
     height: 4px;
-    background: #30363d;
+    background: #e9ecef;
     border-radius: 2px;
     margin-top: 12px;
     overflow: hidden;
   }
   .progress-bar .fill {
     height: 100%;
-    background: #238636;
+    background: #0d6efd;
     transition: width 1s ease;
     border-radius: 2px;
   }
@@ -155,7 +156,7 @@
     justify-content: space-between;
     align-items: center;
     padding: 8px 12px;
-    border-bottom: 1px solid #21262d;
+    border-bottom: 1px solid #e9ecef;
     font-size: 13px;
   }
   .task-item:last-child { border-bottom: none; }
@@ -165,15 +166,15 @@
     font-size: 11px;
     font-weight: 500;
   }
-  .badge-done { background: #1a5a2a; color: #7ee787; }
-  .badge-error { background: #5a1a1a; color: #ff7b72; }
-  .badge-running { background: #1a3a5a; color: #79c0ff; }
+  .badge-done { background: #dcffe4; color: #22863a; }
+  .badge-error { background: #ffeef0; color: #d73a49; }
+  .badge-running { background: #ddf4ff; color: #0969da; }
 
   /* Report iframe */
   #report-frame {
     width: 100%;
     height: 0;
-    border: 1px solid #30363d;
+    border: 1px solid #d0d7de;
     border-radius: 8px;
     margin-top: 16px;
     background: #fff;
@@ -182,7 +183,7 @@
   .delete-btn {
     background: none;
     border: none;
-    color: #da3633;
+    color: #dc3545;
     cursor: pointer;
     font-size: 16px;
     padding: 4px;
@@ -239,7 +240,7 @@
 
     <!-- Add NSX form -->
     <div id="add-form">
-      <h2 style="font-size:14px;color:#8b949e;margin-bottom:8px">Новое подключение NSX</h2>
+      <h2 style="font-size:14px;color:#6c757d;margin-bottom:8px">Новое подключение NSX</h2>
       <div class="form-row">
         <div class="form-group"><label>Название</label><input type="text" id="new-name" placeholder="NSX-Prod"></div>
         <div class="form-group"><label>URL</label><input type="text" id="new-url" placeholder="https://nsx-manager.local"></div>
@@ -258,12 +259,12 @@
     <div id="connections-list">
       {% for conn in connections %}
       <div class="task-item" data-name="{{ conn.name }}">
-        <span><strong>{{ conn.name }}</strong> — {{ conn.url }} <span style="color:#8b949e">({{ conn.username }})</span></span>
+        <span><strong>{{ conn.name }}</strong> — {{ conn.url }} <span style="color:#6c757d">({{ conn.username }})</span></span>
         <button class="delete-btn" onclick="deleteNSX('{{ conn.name }}')" title="Удалить">✕</button>
       </div>
       {% endfor %}
       {% if not connections %}
-      <div style="color:#8b949e;font-size:13px;padding:12px">Нет сохранённых подключений. Добавьте через "+ Добавить новый NSX…"</div>
+      <div style="color:#6c757d;font-size:13px;padding:12px">Нет сохранённых подключений. Добавьте через "+ Добавить новый NSX…"</div>
       {% endif %}
     </div>
   </div>
@@ -328,7 +329,7 @@
             </tr>
           </thead>
           <tbody id="edge-tbody">
-            <tr><td colspan="7" style="text-align:center;color:#8b949e;padding:40px">Нажмите "Collect" для загрузки данных</td></tr>
+            <tr><td colspan="7" style="text-align:center;color:#6c757d;padding:40px">Нажмите "Collect" для загрузки данных</td></tr>
           </tbody>
         </table>
       </div>
@@ -337,11 +338,11 @@
     <!-- Summary card for edge tab -->
     <div id="edge-summary" class="card" style="display:none">
       <div style="display:flex;gap:16px;flex-wrap:wrap">
-        <div><span style="color:#8b949e;font-size:12px">Total T1s</span><br><span id="edge-total" style="font-size:20px;font-weight:700;color:#58a6ff">0</span></div>
-        <div><span style="color:#8b949e;font-size:12px">With Edge Cluster</span><br><span id="edge-with-ec" style="font-size:20px;font-weight:700;color:#3fb950">0</span></div>
-        <div><span style="color:#8b949e;font-size:12px">Without Placement</span><br><span id="edge-without-ec" style="font-size:20px;font-weight:700;color:#f85149">0</span></div>
-        <div><span style="color:#8b949e;font-size:12px">HA Active</span><br><span id="edge-ha-active" style="font-size:20px;font-weight:700;color:#3fb950">0</span></div>
-        <div><span style="color:#8b949e;font-size:12px">HA Standby</span><br><span id="edge-ha-standby" style="font-size:20px;font-weight:700;color:#d29922">0</span></div>
+        <div><span style="color:#6c757d;font-size:12px">Total T1s</span><br><span id="edge-total" style="font-size:20px;font-weight:700;color:#0d6efd">0</span></div>
+        <div><span style="color:#6c757d;font-size:12px">With Edge Cluster</span><br><span id="edge-with-ec" style="font-size:20px;font-weight:700;color:#22863a">0</span></div>
+        <div><span style="color:#6c757d;font-size:12px">Without Placement</span><br><span id="edge-without-ec" style="font-size:20px;font-weight:700;color:#d73a49">0</span></div>
+        <div><span style="color:#6c757d;font-size:12px">HA Active</span><br><span id="edge-ha-active" style="font-size:20px;font-weight:700;color:#22863a">0</span></div>
+        <div><span style="color:#6c757d;font-size:12px">HA Standby</span><br><span id="edge-ha-standby" style="font-size:20px;font-weight:700;color:#bf8700">0</span></div>
       </div>
     </div>
 
@@ -446,9 +447,9 @@ function startEdgePolling(taskId) {
       if (task.status === 'error') {
         clearInterval(edgePollInterval);
         edgePollInterval = null;
-        html = '<div class="status-box" style="border-color:#da3633">';
-        html += '<div><span class="nsx-name">' + task.nsx_name + '</span> ❌ <span style="color:#ff7b72">Ошибка</span></div>';
-        html += '<div class="value" style="color:#ff7b72">' + (task.error || 'Unknown error') + '</div>';
+        html = '<div class="status-box" style="border-color:#dc3545">';
+        html += '<div><span class="nsx-name">' + task.nsx_name + '</span> ❌ <span style="color:#d73a49">Ошибка</span></div>';
+        html += '<div class="value" style="color:#d73a49">' + (task.error || 'Unknown error') + '</div>';
         html += '</div>';
         statusDiv.innerHTML = html;
         document.getElementById('edge-run-btn').disabled = false;
@@ -500,7 +501,7 @@ function renderEdgeTable(data) {
   const results = document.getElementById('edge-results');
 
   if (!data.length) {
-    tbody.innerHTML = '<tr><td colspan="7" style="text-align:center;color:#8b949e;padding:40px">Нет данных</td></tr>';
+    tbody.innerHTML = '<tr><td colspan="7" style="text-align:center;color:#6c757d;padding:40px">Нет данных</td></tr>';
     results.style.display = 'block';
     return;
   }
@@ -560,13 +561,13 @@ function renderEdgeTable(data) {
     var standby = e.ha_standby_edge || '—';
     var mode = e.ha_mode || '—';
 
-    var activeStyle = e.ha_active_edge ? ' style="color:#3fb950;font-weight:600"' : '';
-    var standbyStyle = e.ha_standby_edge ? ' style="color:#8b949e"' : '';
+    var activeStyle = e.ha_active_edge ? ' style="color:#22863a;font-weight:600"' : '';
+    var standbyStyle = e.ha_standby_edge ? ' style="color:#6c757d"' : '';
 
     html += '<tr>';
     html += '<td>' + (i + 1) + '</td>';
     html += '<td>' + escHtml(e.display_name || e.id) + '</td>';
-    html += '<td' + (e.edge_cluster_name ? ' style="border-left:3px solid #58a6ff"' : '') + '>' + escHtml(cluster) + '</td>';
+    html += '<td' + (e.edge_cluster_name ? ' style="border-left:3px solid #0d6efd"' : '') + '>' + escHtml(cluster) + '</td>';
     html += '<td>' + escHtml(preferred) + '</td>';
     html += '<td' + activeStyle + '>' + escHtml(active) + '</td>';
     html += '<td' + standbyStyle + '>' + escHtml(standby) + '</td>';
@@ -766,8 +767,8 @@ function startPolling(taskId) {
       }
 
       if (task.status === 'done') {
-        html = '<div class="status-box" style="border-color:#238636">';
-        html += '<div><span class="nsx-name">' + task.nsx_name + '</span> ✅ <span style="color:#7ee787">Готово!</span></div>';
+        html = '<div class="status-box" style="border-color:#22863a">';
+        html += '<div><span class="nsx-name">' + task.nsx_name + '</span> ✅ <span style="color:#22863a">Готово!</span></div>';
         html += '<div style="margin-top:8px"><a class="btn btn-primary" href="/report/' + taskId + '" target="_blank">📊 Открыть отчёт</a></div>';
         html += '</div>';
 
@@ -782,9 +783,9 @@ function startPolling(taskId) {
       }
 
       if (task.status === 'error') {
-        html = '<div class="status-box" style="border-color:#da3633">';
-        html += '<div><span class="nsx-name">' + task.nsx_name + '</span> ❌ <span style="color:#ff7b72">Ошибка</span></div>';
-        html += '<div class="value" style="color:#ff7b72">' + task.error + '</div>';
+        html = '<div class="status-box" style="border-color:#dc3545">';
+        html += '<div><span class="nsx-name">' + task.nsx_name + '</span> ❌ <span style="color:#d73a49">Ошибка</span></div>';
+        html += '<div class="value" style="color:#d73a49">' + task.error + '</div>';
         html += '</div>';
 
         clearInterval(pollInterval);

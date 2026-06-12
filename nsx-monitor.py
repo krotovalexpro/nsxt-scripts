@@ -1117,7 +1117,7 @@ def generate_html_report(
                 active = ei.ha_active_edge or "—"
                 active_style = ""
                 if ei.ha_active_edge:
-                    active_style = " style='color:#3fb950;font-weight:600'"
+                    active_style = " style='color:#22863a;font-weight:600'"
                 edge_cells = (
                     f"  <td>{ec}</td>\n"
                     f"  <td{active_style}>{active}</td>\n"
@@ -1367,8 +1367,8 @@ def generate_edge_html_report(
         standby = e.ha_standby_edge or "—"
         mode = e.ha_mode or "—"
 
-        active_style = " style='color:#3fb950;font-weight:600'" if e.ha_active_edge else ""
-        standby_style = " style='color:#8b949e'" if e.ha_standby_edge else ""
+        active_style = " style='color:#22863a;font-weight:600'" if e.ha_active_edge else ""
+        standby_style = " style='color:#6c757d'" if e.ha_standby_edge else ""
 
         cluster_cls = " class='cluster'" if e.edge_cluster_name else ""
 
@@ -1397,88 +1397,89 @@ def generate_edge_html_report(
   body {{
     font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto,
                  'Helvetica Neue', Arial, sans-serif;
-    background: #0d1117;
-    color: #e6edf3;
+    background: #f0f2f5;
+    color: #1a1a2e;
     padding: 24px;
   }}
   .container {{ max-width: 1600px; margin: 0 auto; }}
-  h1 {{ font-size: 24px; font-weight: 700; margin-bottom: 4px; color: #f0f6fc; }}
-  .subtitle {{ color: #8b949e; font-size: 14px; margin-bottom: 24px; }}
+  h1 {{ font-size: 24px; font-weight: 700; margin-bottom: 4px; color: #16213e; }}
+  .subtitle {{ color: #6c757d; font-size: 14px; margin-bottom: 24px; }}
 
   /* Summary cards */
   .summary {{ display: flex; gap: 16px; flex-wrap: wrap; margin-bottom: 24px; }}
   .card {{
-    background: #161b22;
-    border: 1px solid #30363d;
+    background: #fff;
+    border: 1px solid #d0d7de;
     border-radius: 8px;
     padding: 16px 20px;
     flex: 1 1 140px;
     min-width: 120px;
+    box-shadow: 0 1px 3px rgba(0,0,0,0.04);
   }}
   .card .label {{
     font-size: 11px;
-    color: #8b949e;
+    color: #6c757d;
     text-transform: uppercase;
     letter-spacing: 0.5px;
     margin-bottom: 4px;
   }}
   .card .value {{ font-size: 22px; font-weight: 700; }}
-  .card .value.blue   {{ color: #58a6ff; }}
-  .card .value.green  {{ color: #3fb950; }}
-  .card .value.red    {{ color: #f85149; }}
-  .card .value.amber  {{ color: #d29922; }}
+  .card .value.blue   {{ color: #0d6efd; }}
+  .card .value.green  {{ color: #22863a; }}
+  .card .value.red    {{ color: #d73a49; }}
+  .card .value.amber  {{ color: #bf8700; }}
 
   /* Table */
   .table-wrap {{
-    background: #161b22;
-    border: 1px solid #30363d;
+    background: #fff;
+    border: 1px solid #d0d7de;
     border-radius: 10px;
     overflow-x: auto;
   }}
   table {{ width: 100%; border-collapse: collapse; font-size: 13px; min-width: 900px; }}
   th {{
-    background: #1c2333;
-    color: #8b949e;
+    background: #f6f8fa;
+    color: #6c757d;
     padding: 11px 12px;
     text-align: left;
     font-weight: 600;
     font-size: 12px;
     text-transform: uppercase;
     letter-spacing: 0.4px;
-    border-bottom: 2px solid #30363d;
+    border-bottom: 2px solid #d0d7de;
     cursor: pointer;
     user-select: none;
     white-space: nowrap;
     position: sticky;
     top: 0;
   }}
-  th:hover {{ color: #f0f6fc; background: #212a3e; }}
-  th.sorted-asc::after {{ content: ' ▲'; font-size: 10px; color: #58a6ff; }}
-  th.sorted-desc::after {{ content: ' ▼'; font-size: 10px; color: #58a6ff; }}
+  th:hover {{ color: #16213e; background: #e9ecef; }}
+  th.sorted-asc::after {{ content: ' ▲'; font-size: 10px; color: #0d6efd; }}
+  th.sorted-desc::after {{ content: ' ▼'; font-size: 10px; color: #0d6efd; }}
   td {{
     padding: 9px 12px;
-    border-bottom: 1px solid #21262d;
+    border-bottom: 1px solid #e9ecef;
     vertical-align: middle;
   }}
   tr:last-child td {{ border-bottom: none; }}
-  tr:hover td {{ background: #1c2333 !important; }}
-  tr:nth-child(even) td {{ background: #0d1117; }}
-  tr:nth-child(odd) td {{ background: #161b22; }}
+  tr:hover td {{ background: #f6f8fa !important; }}
+  tr:nth-child(even) td {{ background: #fafbfc; }}
+  tr:nth-child(odd) td {{ background: #fff; }}
 
-  .cluster {{ border-left: 3px solid #58a6ff; }}
+  .cluster {{ border-left: 3px solid #0d6efd; }}
 
   .footer {{
     text-align: center;
-    color: #484f58;
+    color: #8c8f94;
     font-size: 11px;
     margin-top: 20px;
     padding: 12px 0;
   }}
 
   .table-wrap::-webkit-scrollbar {{ height: 8px; }}
-  .table-wrap::-webkit-scrollbar-track {{ background: #0d1117; }}
-  .table-wrap::-webkit-scrollbar-thumb {{ background: #30363d; border-radius: 4px; }}
-  .table-wrap::-webkit-scrollbar-thumb:hover {{ background: #484f58; }}
+  .table-wrap::-webkit-scrollbar-track {{ background: #f0f2f5; }}
+  .table-wrap::-webkit-scrollbar-thumb {{ background: #d0d7de; border-radius: 4px; }}
+  .table-wrap::-webkit-scrollbar-thumb:hover {{ background: #8c8f94; }}
 </style>
 </head>
 <body>
