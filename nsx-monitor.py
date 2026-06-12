@@ -140,6 +140,71 @@ class T1Snapshot:
         )
 
 
+class T1EdgeInfo:
+    """Edge placement and HA status for a single Tier-1 router."""
+
+    __slots__ = (
+        "t1_id", "display_name",
+        "edge_cluster_name",
+        "preferred_edges",
+        "ha_active_edge",
+        "ha_standby_edge",
+        "ha_mode",
+    )
+
+    def __init__(
+        self,
+        t1_id: str,
+        display_name: str = "",
+        edge_cluster_name: str = "",
+        preferred_edges: list = None,
+        ha_active_edge: str = "",
+        ha_standby_edge: str = "",
+        ha_mode: str = "",
+    ):
+        self.t1_id = t1_id
+        self.display_name = display_name or t1_id
+        self.edge_cluster_name = edge_cluster_name
+        self.preferred_edges = preferred_edges or []
+        self.ha_active_edge = ha_active_edge
+        self.ha_standby_edge = ha_standby_edge
+        self.ha_mode = ha_mode
+
+    @property
+    def name(self) -> str:
+        return self.display_name or self.t1_id
+
+    def to_dict(self) -> dict:
+        return {
+            "id": self.t1_id,
+            "display_name": self.display_name,
+            "edge_cluster_name": self.edge_cluster_name,
+            "preferred_edges": self.preferred_edges,
+            "ha_active_edge": self.ha_active_edge,
+            "ha_standby_edge": self.ha_standby_edge,
+            "ha_mode": self.ha_mode,
+        }
+
+    @classmethod
+    def from_dict(cls, data: dict) -> "T1EdgeInfo":
+        return cls(
+            t1_id=data["id"],
+            display_name=data.get("display_name", ""),
+            edge_cluster_name=data.get("edge_cluster_name", ""),
+            preferred_edges=data.get("preferred_edges", []),
+            ha_active_edge=data.get("ha_active_edge", ""),
+            ha_standby_edge=data.get("ha_standby_edge", ""),
+            ha_mode=data.get("ha_mode", ""),
+        )
+
+    def __repr__(self) -> str:
+        return (
+            f"T1EdgeInfo({self.name}, "
+            f"cluster={self.edge_cluster_name}, "
+            f"active={self.ha_active_edge})"
+        )
+
+
 class T1Delta:
     """Computed delta (rate) between two snapshots for a single T1."""
 
@@ -601,6 +666,156 @@ class NSXMonitor:
         )
         return start_ts, snapshots
 
+    # ------------------------------------------------------------------
+    # Edge placement & HA status
+    # ------------------------------------------------------------------
+
+    def collect_t1_edge_placement(
+        self, max_workers: int = DEFAULT_WORKERS
+    ) -> List[T1EdgeInfo]:
+        """
+        Collect edge placement and HA status for all Tier-1 routers.
+
+        For each T1, resolves:
+          - Edge cluster name (from locale-services)
+          - Preferred edge transport node hostnames
+          - Active/Standby HA status (from logical-router status)
+
+        Uses parallel workers for locale-services and LR status calls.
+        """
+        tier1s = self.get_all_tier1s()
+        if not tier1s:
+            log.error("No Tier-1 routers returned by the API")
+            return []
+
+        log.info("Collecting edge placement for %d T1s…", len(tier1s))
+
+        # --- 1. Pre-load maps: edge-cluster + transport-node ---
+        edge_clusters = self._get("/api/v1/edge-clusters")
+        ec_map: dict[str, str] = {}
+        if edge_clusters:
+            for ec in edge_clusters.get("results") or []:
+                ec_map[ec["id"]] = ec.get("display_name", ec["id"])
+
+        transport_nodes = self._get("/api/v1/transport-nodes")
+        tn_map: dict[str, str] = {}
+        if transport_nodes:
+            for tn in transport_nodes.get("results") or []:
+                tn_map[tn["id"]] = tn.get("display_name", tn["id"])
+
+        # --- 2. Collect locale-services for all T1s (parallel) ---
+        ls_map: dict[str, list] = {}
+        with ThreadPoolExecutor(max_workers=max_workers) as pool:
+            fut_map = {}
+            for t1 in tier1s:
+                tid = t1["id"]
+                fut = pool.submit(
+                    self._get,
+                    f"/policy/api/v1/infra/tier-1s/{tid}/locale-services",
+                )
+                fut_map[fut] = tid
+
+            for future in as_completed(fut_map):
+                tid = fut_map[future]
+                try:
+                    data = future.result()
+                    if data and data.get("results"):
+                        ls_map[tid] = data["results"]
+                except Exception:
+                    pass
+
+        # --- 3. Get all logical routers (TIER1) for HA status ---
+        lr_data = self._get("/api/v1/logical-routers?router_type=TIER1")
+        logical_routers = lr_data.get("results") or [] if lr_data else []
+
+        lr_by_name: dict[str, dict] = {}
+        for lr in logical_routers:
+            lr_by_name[lr.get("display_name", "")] = lr
+
+        # Collect HA statuses (parallel)
+        ha_statuses: dict[str, dict] = {}
+        with ThreadPoolExecutor(max_workers=max_workers) as pool:
+            fut_map = {}
+            for lr in logical_routers:
+                dn = lr.get("display_name", "")
+                if dn:
+                    fut = pool.submit(
+                        self._get,
+                        f"/api/v1/logical-routers/{lr['id']}/status",
+                    )
+                    fut_map[fut] = dn
+
+            for future in as_completed(fut_map):
+                dn = fut_map[future]
+                try:
+                    data = future.result()
+                    if data:
+                        ha_statuses[dn] = data
+                except Exception:
+                    pass
+
+        # --- 4. Build T1EdgeInfo objects ---
+        result: list[T1EdgeInfo] = []
+        for t1 in tier1s:
+            t1_id = t1["id"]
+            display_name = t1.get("display_name", "") or t1_id
+
+            # Locale-services → edge cluster + preferred edges
+            edge_cluster_name = ""
+            preferred_edges: list[str] = []
+
+            services = ls_map.get(t1_id, [])
+            if services:
+                ls = services[0]
+                ec_path = ls.get("edge_cluster_path", "")
+                if ec_path:
+                    ec_id = ec_path.strip("/").split("/")[-1]
+                    edge_cluster_name = ec_map.get(ec_id, ec_id)
+
+                for edge_path in ls.get("preferred_edge_paths", []):
+                    tn_id = edge_path.strip("/").split("/")[-1]
+                    tn_name = tn_map.get(tn_id, tn_id)
+                    preferred_edges.append(tn_name)
+
+            # Logical-router status → HA role
+            ha_active = ""
+            ha_standby = ""
+            ha_mode = ""
+
+            lr = lr_by_name.get(display_name)
+            if lr:
+                status = ha_statuses.get(display_name)
+                if status:
+                    tn_statuses = status.get("transport_node_statuses", [])
+                    for tn_s in tn_statuses:
+                        tn_id = tn_s.get("transport_node_id", "")
+                        tn_name = tn_map.get(tn_id, tn_id)
+                        role = tn_s.get("ha_role", "")
+                        if role == "ACTIVE":
+                            ha_active = tn_name
+                        elif role == "STANDBY":
+                            ha_standby = tn_name
+                    if tn_statuses:
+                        ha_mode = "ACTIVE_STANDBY"
+
+            result.append(T1EdgeInfo(
+                t1_id=t1_id,
+                display_name=display_name,
+                edge_cluster_name=edge_cluster_name,
+                preferred_edges=preferred_edges,
+                ha_active_edge=ha_active,
+                ha_standby_edge=ha_standby,
+                ha_mode=ha_mode,
+            ))
+
+        with_ec = sum(1 for r in result if r.edge_cluster_name)
+        with_ha = sum(1 for r in result if r.ha_active_edge)
+        log.info(
+            "Edge placement done: %d T1s — %d with edge cluster, %d with HA status",
+            len(result), with_ec, with_ha,
+        )
+        return result
+
 
 # ===================================================================
 # Delta Computation
@@ -739,11 +954,25 @@ def generate_html_report(
     snap1_ts: float,
     snap2_ts: float,
     title: str = "NSX-T Tier-1 Router Traffic Report",
+    edge_map: Optional[Dict[str, T1EdgeInfo]] = None,
 ) -> str:
-    """Build a self-contained HTML report string from the delta data."""
+    """Build a self-contained HTML report string from the delta data.
+
+    If *edge_map* is provided, extra columns for edge cluster and HA
+    role are added after the T1 Name column.
+    """
 
     # Sort by TX Mbps descending
     sorted_deltas = sorted(deltas_dict.values(), key=lambda d: d.tx_mbps, reverse=True)
+
+    edge_columns = edge_map is not None
+    edge_extra_header = ""
+    if edge_columns:
+        edge_extra_header = (
+            '            <th class="sortable">Edge Cluster</th>\n'
+            '            <th class="sortable">Active Edge</th>\n'
+            '            <th class="sortable">HA Mode</th>\n'
+        )
 
     # --- Build table rows ------------------------------------------------
     rows_html = ""
@@ -761,10 +990,32 @@ def generate_html_report(
         # Short ID for display
         short_id = d.t1_id[:12] + "…" if len(d.t1_id) > 12 else d.t1_id
 
+        # Edge info columns (optional)
+        edge_cells = ""
+        if edge_columns:
+            ei = edge_map.get(d.t1_id)
+            if ei and ei.edge_cluster_name:
+                ec = ei.edge_cluster_name
+                active = ei.ha_active_edge or "—"
+                ha = ei.ha_mode or "—"
+                active_style = ""
+                if ei.ha_active_edge:
+                    active_style = " style='color:#3fb950;font-weight:600'"
+                edge_cells = (
+                    f"  <td>{ec}</td>\n"
+                    f"  <td{active_style}>{active}</td>\n"
+                    f"  <td>{ha}</td>\n"
+                )
+            else:
+                edge_cells = "  <td>—</td>\n  <td>—</td>\n  <td>—</td>\n"
+
+        col_span_extra = "3" if edge_columns else ""
+
         rows_html += (
             f"<tr>\n"
             f"  <td>{i}</td>\n"
             f"  <td>{d.name}</td>\n"
+            f"{edge_cells}"
             f"  <td class='mono' title='{d.t1_id}'>{short_id}</td>\n"
             f"  <td class='num'>{rx_mb:.4f}</td>\n"
             f"  <td class='num'>{tx_mb:.4f}</td>\n"
@@ -915,7 +1166,7 @@ def generate_html_report(
       <tr>
         <th class="sortable">#</th>
         <th class="sortable">T1 Name</th>
-        <th class="sortable">ID</th>
+{edge_extra_header}        <th class="sortable">ID</th>
         <th class="sortable num">RX MB/s</th>
         <th class="sortable num">TX MB/s</th>
         <th class="sortable num">RX Mbps</th>
@@ -969,6 +1220,241 @@ table.querySelectorAll('th.sortable').forEach((th, colIdx) => {{
 
 
 # ===================================================================
+# Edge Placement HTML Report Generator
+# ===================================================================
+
+def generate_edge_html_report(
+    edge_info_list: List[T1EdgeInfo],
+    title: str = "NSX-T T1 Edge Placement Report",
+) -> str:
+    """Build a self-contained HTML report for T1 → Edge mapping + HA status."""
+
+    # Stats
+    total = len(edge_info_list)
+    with_ec = sum(1 for e in edge_info_list if e.edge_cluster_name)
+    without_ec = total - with_ec
+    with_active = sum(1 for e in edge_info_list if e.ha_active_edge)
+    with_standby = sum(1 for e in edge_info_list if e.ha_standby_edge)
+    active_only = with_active - with_standby  # non-HA T1s that are just active
+
+    # Sort: ones with edge cluster first, then by name
+    sorted_list = sorted(
+        edge_info_list,
+        key=lambda e: (0 if e.edge_cluster_name else 1, e.name.lower()),
+    )
+
+    rows_html = ""
+    for i, e in enumerate(sorted_list, 1):
+        cluster = e.edge_cluster_name or "—"
+        preferred = ", ".join(e.preferred_edges) if e.preferred_edges else "—"
+        active = e.ha_active_edge or "—"
+        standby = e.ha_standby_edge or "—"
+        mode = e.ha_mode or "—"
+
+        active_style = " style='color:#3fb950;font-weight:600'" if e.ha_active_edge else ""
+        standby_style = " style='color:#8b949e'" if e.ha_standby_edge else ""
+
+        cluster_bg = " style='background:#f0f6ff'" if e.edge_cluster_name else ""
+
+        rows_html += (
+            f"<tr>\n"
+            f"  <td>{i}</td>\n"
+            f"  <td>{e.name}</td>\n"
+            f"  <td{cluster_bg}>{cluster}</td>\n"
+            f"  <td>{preferred}</td>\n"
+            f"  <td{active_style}>{active}</td>\n"
+            f"  <td{standby_style}>{standby}</td>\n"
+            f"  <td>{mode}</td>\n"
+            f"</tr>\n"
+        )
+
+    ts = datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M:%S UTC")
+
+    html = f"""<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>{title}</title>
+<style>
+  * {{ margin: 0; padding: 0; box-sizing: border-box; }}
+  body {{
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto,
+                 'Helvetica Neue', Arial, sans-serif;
+    background: #0d1117;
+    color: #e6edf3;
+    padding: 24px;
+  }}
+  .container {{ max-width: 1600px; margin: 0 auto; }}
+  h1 {{ font-size: 24px; font-weight: 700; margin-bottom: 4px; color: #f0f6fc; }}
+  .subtitle {{ color: #8b949e; font-size: 14px; margin-bottom: 24px; }}
+
+  /* Summary cards */
+  .summary {{ display: flex; gap: 16px; flex-wrap: wrap; margin-bottom: 24px; }}
+  .card {{
+    background: #161b22;
+    border: 1px solid #30363d;
+    border-radius: 8px;
+    padding: 16px 20px;
+    flex: 1 1 140px;
+    min-width: 120px;
+  }}
+  .card .label {{
+    font-size: 11px;
+    color: #8b949e;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    margin-bottom: 4px;
+  }}
+  .card .value {{ font-size: 22px; font-weight: 700; }}
+  .card .value.blue   {{ color: #58a6ff; }}
+  .card .value.green  {{ color: #3fb950; }}
+  .card .value.red    {{ color: #f85149; }}
+  .card .value.amber  {{ color: #d29922; }}
+
+  /* Table */
+  .table-wrap {{
+    background: #161b22;
+    border: 1px solid #30363d;
+    border-radius: 10px;
+    overflow-x: auto;
+  }}
+  table {{ width: 100%; border-collapse: collapse; font-size: 13px; min-width: 900px; }}
+  th {{
+    background: #1c2333;
+    color: #8b949e;
+    padding: 11px 12px;
+    text-align: left;
+    font-weight: 600;
+    font-size: 12px;
+    text-transform: uppercase;
+    letter-spacing: 0.4px;
+    border-bottom: 2px solid #30363d;
+    cursor: pointer;
+    user-select: none;
+    white-space: nowrap;
+    position: sticky;
+    top: 0;
+  }}
+  th:hover {{ color: #f0f6fc; background: #212a3e; }}
+  th.sorted-asc::after {{ content: ' ▲'; font-size: 10px; color: #58a6ff; }}
+  th.sorted-desc::after {{ content: ' ▼'; font-size: 10px; color: #58a6ff; }}
+  td {{
+    padding: 9px 12px;
+    border-bottom: 1px solid #21262d;
+    vertical-align: middle;
+  }}
+  tr:last-child td {{ border-bottom: none; }}
+  tr:hover td {{ background: #1c2333 !important; }}
+  tr:nth-child(even) td {{ background: #0d1117; }}
+  tr:nth-child(odd) td {{ background: #161b22; }}
+
+  .mono {{ font-family: 'SF Mono', 'Consolas', 'Liberation Mono', monospace; font-size: 12px; }}
+
+  .footer {{
+    text-align: center;
+    color: #484f58;
+    font-size: 11px;
+    margin-top: 20px;
+    padding: 12px 0;
+  }}
+
+  .table-wrap::-webkit-scrollbar {{ height: 8px; }}
+  .table-wrap::-webkit-scrollbar-track {{ background: #0d1117; }}
+  .table-wrap::-webkit-scrollbar-thumb {{ background: #30363d; border-radius: 4px; }}
+  .table-wrap::-webkit-scrollbar-thumb:hover {{ background: #484f58; }}
+</style>
+</head>
+<body>
+<div class="container">
+
+  <h1>{title}</h1>
+  <div class="subtitle">Generated: {ts}</div>
+
+  <div class="summary">
+    <div class="card">
+      <div class="label">Total T1s</div>
+      <div class="value blue">{total}</div>
+    </div>
+    <div class="card">
+      <div class="label">With Edge Cluster</div>
+      <div class="value green">{with_ec}</div>
+    </div>
+    <div class="card">
+      <div class="label">Without Placement</div>
+      <div class="value red">{without_ec}</div>
+    </div>
+    <div class="card">
+      <div class="label">HA Active</div>
+      <div class="value green">{with_active}</div>
+    </div>
+    <div class="card">
+      <div class="label">HA Standby</div>
+      <div class="value amber">{with_standby}</div>
+    </div>
+  </div>
+
+  <div class="table-wrap">
+  <table>
+    <thead>
+      <tr>
+        <th data-col="num" data-numeric="true">#</th>
+        <th data-col="name">T1 Name</th>
+        <th data-col="cluster">Edge Cluster</th>
+        <th data-col="edges">Preferred Edges</th>
+        <th data-col="active">Active Edge</th>
+        <th data-col="standby">Standby Edge</th>
+        <th data-col="mode">HA Mode</th>
+      </tr>
+    </thead>
+    <tbody>
+{rows_html}
+    </tbody>
+  </table>
+  </div>
+
+  <div class="footer">
+    Generated by nsx-monitor.py &mdash; {ts}
+  </div>
+
+</div>
+<script>
+(function() {{
+  'use strict';
+  const table = document.querySelector('table');
+  const tbody = table.querySelector('tbody');
+
+  table.querySelectorAll('th').forEach((th, colIdx) => {{
+    th.addEventListener('click', () => {{
+      const isNumeric = th.hasAttribute('data-numeric');
+      const isAsc = th.classList.contains('sorted-asc');
+      table.querySelectorAll('th').forEach(h => h.classList.remove('sorted-asc', 'sorted-desc'));
+      th.classList.add(isAsc ? 'sorted-desc' : 'sorted-asc');
+
+      const rows = Array.from(tbody.querySelectorAll('tr'));
+      rows.sort((a, b) => {{
+        let va = a.cells[colIdx].textContent.trim();
+        let vb = b.cells[colIdx].textContent.trim();
+        if (isNumeric) {{
+          const na = parseFloat(va.replace(/[^0-9.-]/g, ''));
+          const nb = parseFloat(vb.replace(/[^0-9.-]/g, ''));
+          if (!isNaN(na) && !isNaN(nb)) {{
+            return isAsc ? na - nb : nb - na;
+          }}
+        }}
+        return isAsc ? va.localeCompare(vb) : vb.localeCompare(va);
+      }});
+      rows.forEach(r => tbody.appendChild(r));
+    }});
+  }});
+}})();
+</script>
+</body>
+</html>"""
+    return html
+
+
+# ===================================================================
 # Mode Handlers
 # ===================================================================
 
@@ -997,6 +1483,7 @@ def _generate_and_save_report(
     snap1_ts: float,
     snap2_ts: float,
     output_path: str = "",
+    edge_map: Optional[Dict[str, T1EdgeInfo]] = None,
 ) -> str:
     """Build the HTML report and write it to a file. Returns the file path."""
     if not output_path:
@@ -1010,6 +1497,7 @@ def _generate_and_save_report(
         errors=errors,
         snap1_ts=snap1_ts,
         snap2_ts=snap2_ts,
+        edge_map=edge_map,
     )
     with open(output_path, "w") as fh:
         fh.write(html)
@@ -1116,6 +1604,17 @@ def handle_minutes(monitor: NSXMonitor, args: argparse.Namespace):
     snap1_path = save_snapshot(snap1_list, snap1_ts)
     print(f"\nInitial snapshot: {snap1_path}  ({len(snap1_list)} T1s)")
 
+    # --- Optional: collect edge info (during the wait window) ---
+    edge_map: dict[str, T1EdgeInfo] = {}
+    if args.with_edge_info:
+        log.info("Collecting edge placement info (in parallel with wait)…")
+        try:
+            edge_list = monitor.collect_t1_edge_placement(max_workers=args.workers)
+            edge_map = {e.t1_id: e for e in edge_list}
+            log.info("Edge placement: %d T1s collected", len(edge_list))
+        except Exception as exc:
+            log.warning("Edge placement collection failed: %s", exc)
+
     # --- Wait ---
     resume_dt = datetime.fromtimestamp(time.time() + wait_sec, tz=timezone.utc)
     print(f"\nWaiting {args.minutes} minute(s) ({wait_sec}s)…")
@@ -1151,6 +1650,7 @@ def handle_minutes(monitor: NSXMonitor, args: argparse.Namespace):
         snap1_ts=snap1_ts,
         snap2_ts=snap2_ts,
         output_path=args.output,
+        edge_map=edge_map if edge_map else None,
     )
 
     print(f"\nReport: {report_path}")
@@ -1160,6 +1660,65 @@ def handle_minutes(monitor: NSXMonitor, args: argparse.Namespace):
     print(f"  Errors:     {errors}")
     print(f"  Wall-clock: {fallback_elapsed:.1f}s")
     _print_top10(deltas)
+
+
+# ------------------------------------------------------------------
+# --edge-map
+# ------------------------------------------------------------------
+
+def handle_edge_map(monitor: NSXMonitor, args: argparse.Namespace):
+    """Collect and display T1 → Edge placement with HA status."""
+    log.info("=== Mode: EDGE MAP ===")
+
+    edge_info = monitor.collect_t1_edge_placement(max_workers=args.workers)
+    if not edge_info:
+        log.error("No edge placement data collected.")
+        sys.exit(1)
+
+    with_ec = sum(1 for e in edge_info if e.edge_cluster_name)
+    with_ha = sum(1 for e in edge_info if e.ha_active_edge)
+
+    # JSON output mode (for app.py subprocess)
+    if getattr(args, "json", False):
+        data = {
+            "status": "ok",
+            "total": len(edge_info),
+            "with_edge_cluster": with_ec,
+            "with_ha": with_ha,
+            "t1_list": [e.to_dict() for e in edge_info],
+        }
+        print(json.dumps(data, indent=2, ensure_ascii=False))
+        return
+
+    print(f"\nEdge Placement: {len(edge_info)} T1s collected")
+    print(f"  With Edge Cluster: {with_ec}")
+    print(f"  With HA Status:    {with_ha}")
+    print()
+
+    # Console table: top 20
+    sorted_show = sorted(
+        edge_info,
+        key=lambda e: (0 if e.edge_cluster_name else 1, e.name.lower()),
+    )[:20]
+
+    print(f"  {'T1 Name':<30} {'Cluster':<20} {'Active Edge':<25} {'Standby Edge':<25} {'Mode':<14}")
+    print("  " + "─" * 120)
+    for e in sorted_show:
+        cluster = e.edge_cluster_name or "—"
+        active = e.ha_active_edge or "—"
+        standby = e.ha_standby_edge or "—"
+        mode = e.ha_mode or "—"
+        print(f"  {e.name:<30} {cluster:<20} {active:<25} {standby:<25} {mode:<14}")
+
+    if len(edge_info) > 20:
+        print(f"  … and {len(edge_info) - 20} more T1s (use -o report.html for full view)")
+
+    # Save HTML report if --output specified
+    if args.output:
+        html = generate_edge_html_report(edge_info)
+        with open(args.output, "w") as fh:
+            fh.write(html)
+        print(f"\nHTML report saved → {args.output}")
 
 
 # ===================================================================
@@ -1191,6 +1750,16 @@ def parse_args(argv: List[str] = None) -> argparse.Namespace:
         default=0,
         metavar="N",
         help="Monitor over N minutes: two snapshots N minutes apart, then delta report",
+    )
+    parser.add_argument(
+        "--edge-map",
+        action="store_true",
+        help="Collect T1 → Edge placement with Active/Standby HA status",
+    )
+    parser.add_argument(
+        "--json",
+        action="store_true",
+        help="With --edge-map: output JSON to stdout (for app.py integration)",
     )
 
     # Snapshot file (required with --report)
@@ -1232,6 +1801,12 @@ def parse_args(argv: List[str] = None) -> argparse.Namespace:
         default=DEFAULT_WORKERS,
         metavar="N",
         help="Number of parallel worker threads (default: %(default)s)",
+    )
+    parser.add_argument(
+        "--with-edge-info",
+        action="store_true",
+        help="When used with --minutes or --report, also collect edge placement and "
+             "add Edge Cluster / HA Role columns to the traffic report",
     )
     parser.add_argument(
         "--debug",
@@ -1278,9 +1853,10 @@ def main(argv: List[str] = None) -> None:
         log.debug("Debug logging enabled")
 
     # Ensure exactly one mode
-    mode_count = sum([bool(args.snapshot), bool(args.report), args.minutes > 0])
+    mode_count = sum([bool(args.snapshot), bool(args.report),
+                      args.minutes > 0, bool(args.edge_map)])
     if mode_count == 0:
-        log.error("No mode specified. Use --snapshot, --report, or --minutes/-m.")
+        log.error("No mode specified. Use --snapshot, --report, --minutes/-m, or --edge-map.")
         sys.exit(1)
     if mode_count > 1:
         log.error("Only one mode can be used at a time.")
@@ -1300,6 +1876,8 @@ def main(argv: List[str] = None) -> None:
         if args.minutes < 1:
             log.warning("--minutes set to %d (minimum recommended is 1)", args.minutes)
         handle_minutes(monitor, args)
+    elif args.edge_map:
+        handle_edge_map(monitor, args)
 
 
 if __name__ == "__main__":

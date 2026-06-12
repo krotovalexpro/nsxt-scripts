@@ -97,18 +97,21 @@ CONNECTIONS: list[dict] = load_connections()
 
 class TaskState:
     """Holds state for a running or completed report task."""
-    __slots__ = ("id", "nsx_name", "status", "progress", "report_path",
-                 "error", "created_at", "finished_at")
+    __slots__ = ("id", "nsx_name", "task_type", "status", "progress",
+                 "report_path", "error", "created_at", "finished_at",
+                 "edge_data")
 
-    def __init__(self, task_id: str, nsx_name: str):
+    def __init__(self, task_id: str, nsx_name: str, task_type: str = "traffic"):
         self.id = task_id
         self.nsx_name = nsx_name
+        self.task_type = task_type  # "traffic" or "edge_map"
         self.status = "starting"  # starting → collecting → waiting → done/error
         self.progress = ""
         self.report_path: Optional[str] = None
         self.error: Optional[str] = None
         self.created_at = time.time()
         self.finished_at: Optional[float] = None
+        self.edge_data: Optional[list[dict]] = None  # for edge_map tasks
 
 
 _tasks: dict[str, TaskState] = {}
@@ -200,6 +203,82 @@ def _run_monitor(task: TaskState, conn: dict, minutes: int, t1_name: str = ""):
         task.report_path = str(report_path)
         task.status = "done"
         task.progress = "Report ready!"
+
+    except Exception as exc:
+        task.status = "error"
+        task.error = str(exc)
+        task.progress = f"Error: {exc}"
+    finally:
+        task.finished_at = time.time()
+
+
+# ---------------------------------------------------------------------------
+# Edge Map task
+# ---------------------------------------------------------------------------
+
+def _run_edge_map(task: TaskState, conn: dict):
+    """Run nsx-monitor.py --edge-map as a subprocess and capture JSON data."""
+    try:
+        task.status = "collecting"
+        task.progress = "Collecting edge placement data…"
+
+        # Write a temporary config.yaml
+        tmp_dir = REPORTS_DIR / task.id
+        tmp_dir.mkdir(exist_ok=True)
+        config_path = tmp_dir / "config.yaml"
+        with open(config_path, "w") as f:
+            f.write(f'nsx_url: "{conn["url"]}"\n')
+            f.write(f'username: "{conn["username"]}"\n')
+            f.write(f'password: "{conn.get("password", "")}"\n')
+            f.write(f"timeout: 300\n")
+
+        report_path = tmp_dir / "edge_report.html"
+
+        # Run CLI to get JSON data
+        task.progress = "Fetching T1 locale-services and HA status…"
+        result = subprocess.run(
+            [
+                sys.executable, str(MONITOR_SCRIPT),
+                "--edge-map",
+                "--json",
+                "--config", str(config_path),
+                "--workers", "8",
+            ],
+            cwd=str(tmp_dir),
+            capture_output=True, text=True, timeout=600,
+        )
+
+        if result.returncode != 0:
+            error_msg = result.stderr.strip() or "Unknown error"
+            raise RuntimeError(f"Edge map failed: {error_msg}")
+
+        # Parse JSON from stdout
+        import json as _json
+        data = _json.loads(result.stdout)
+        task.edge_data = data.get("t1_list", [])
+
+        # Generate HTML report
+        task.progress = "Generating report…"
+        result2 = subprocess.run(
+            [
+                sys.executable, str(MONITOR_SCRIPT),
+                "--edge-map",
+                "--output", str(report_path),
+                "--config", str(config_path),
+                "--workers", "8",
+            ],
+            cwd=str(tmp_dir),
+            capture_output=True, text=True, timeout=600,
+        )
+
+        if result2.returncode != 0:
+            raise RuntimeError(f"Report generation failed:\n{result2.stderr}")
+
+        if report_path.exists():
+            task.report_path = str(report_path)
+
+        task.status = "done"
+        task.progress = f"Collected {len(task.edge_data)} T1s"
 
     except Exception as exc:
         task.status = "error"
@@ -321,18 +400,85 @@ async def task_status(task_id: str):
     result = {
         "id": task.id,
         "nsx_name": task.nsx_name,
+        "task_type": task.task_type,
         "status": task.status,
         "progress": task.progress,
         "created_at": task.created_at,
         "finished_at": task.finished_at,
         "error": task.error,
         "report_ready": task.report_path is not None,
+        "edge_ready": task.edge_data is not None,
     }
     return result
 
 
 @app.get("/report/{task_id}")
 async def get_report(task_id: str):
+    task = _tasks.get(task_id)
+    if not task:
+        raise HTTPException(404, "Task not found")
+    if not task.report_path or not Path(task.report_path).exists():
+        raise HTTPException(404, "Report not ready yet")
+
+    with open(task.report_path) as f:
+        html = f.read()
+    return HTMLResponse(content=html)
+
+
+# ---------------------------------------------------------------------------
+# Edge Map endpoints
+# ---------------------------------------------------------------------------
+
+@app.post("/run-edge-map")
+async def run_edge_map(
+    nsx_name: str = Form(...),
+    password: str = Form(""),
+):
+    conn = next((c for c in CONNECTIONS if c["name"] == nsx_name), None)
+    if not conn:
+        raise HTTPException(404, f"NSX '{nsx_name}' not found")
+
+    conn = {**conn}
+    if password:
+        conn["password"] = password
+
+    if not conn.get("password"):
+        return JSONResponse({
+            "status": "need_password",
+            "nsx_name": nsx_name,
+        })
+
+    task_id = uuid.uuid4().hex[:12]
+    task = TaskState(task_id, nsx_name, task_type="edge_map")
+    _tasks[task_id] = task
+
+    thread = Thread(target=_run_edge_map, args=(task, conn), daemon=True)
+    thread.start()
+
+    return {"status": "started", "task_id": task_id, "nsx_name": nsx_name}
+
+
+@app.get("/edge-data/{task_id}")
+async def get_edge_data(task_id: str):
+    """Return edge placement data as JSON for inline table rendering."""
+    task = _tasks.get(task_id)
+    if not task:
+        raise HTTPException(404, "Task not found")
+    if task.status != "done":
+        raise HTTPException(400, "Data not ready yet")
+    if task.edge_data is None:
+        raise HTTPException(404, "No edge data available")
+
+    return JSONResponse({
+        "status": "ok",
+        "total": len(task.edge_data),
+        "t1_list": task.edge_data,
+    })
+
+
+@app.get("/edge-report/{task_id}")
+async def get_edge_report(task_id: str):
+    """Return the full HTML edge placement report."""
     task = _tasks.get(task_id)
     if not task:
         raise HTTPException(404, "Task not found")

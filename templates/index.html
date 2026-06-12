@@ -20,6 +20,32 @@
   }
   .subtitle { color: #8b949e; font-size: 14px; margin-bottom: 24px; }
 
+  /* ── Tabs ── */
+  .tabs {
+    display: flex;
+    gap: 0;
+    margin-bottom: 20px;
+    border-bottom: 1px solid #30363d;
+  }
+  .tab-btn {
+    background: none;
+    border: none;
+    border-bottom: 2px solid transparent;
+    color: #8b949e;
+    padding: 10px 20px;
+    font-size: 14px;
+    font-weight: 500;
+    cursor: pointer;
+    transition: color 0.2s, border-color 0.2s;
+  }
+  .tab-btn:hover { color: #f0f6fc; }
+  .tab-btn.active {
+    color: #f0f6fc;
+    border-bottom-color: #58a6ff;
+  }
+  .tab-content { display: none; }
+  .tab-content.active { display: block; }
+
   /* Cards */
   .card {
     background: #161b22;
@@ -159,7 +185,16 @@
 <body>
 <div class="container">
   <h1>🔍 NSX-T Traffic Monitor</h1>
-  <div class="subtitle">Выберите NSX Manager и запустите сбор статистики T1</div>
+  <div class="subtitle">Мониторинг Tier-1 роутеров VMware NSX-T</div>
+
+  <!-- Tabs -->
+  <div class="tabs">
+    <button class="tab-btn active" onclick="switchTab('traffic')">📊 Traffic</button>
+    <button class="tab-btn" onclick="switchTab('edge')">🔌 Edge Placement</button>
+  </div>
+
+  <!-- ═══ TAB: Traffic Monitoring ═══ -->
+  <div id="tab-traffic" class="tab-content active">
 
   <!-- NSX Selector -->
   <div class="card">
@@ -227,6 +262,83 @@
   <!-- Status & Report -->
   <div id="status"></div>
   <iframe id="report-frame" sandbox="allow-scripts allow-same-origin"></iframe>
+
+  </div>
+  <!-- ═══ END TAB: Traffic ═══ -->
+
+  <!-- ═══ TAB: Edge Placement ═══ -->
+  <div id="tab-edge" class="tab-content">
+
+    <div class="card">
+      <h2>📡 T1 → Edge Placement</h2>
+      <div class="form-row">
+        <div class="form-group" style="flex:1;min-width:250px">
+          <label>Выберите NSX</label>
+          <select id="edge-nsx-select">
+            {% for conn in connections %}
+            <option value="{{ conn.name }}">
+              {{ conn.name }} — {{ conn.url }}
+            </option>
+            {% endfor %}
+            <option value="__add__">➕ Добавить новый NSX…</option>
+          </select>
+        </div>
+        <div class="form-group">
+          <label>Пароль (если не сохранён)</label>
+          <input type="password" id="edge-password" placeholder="оставьте пустым если сохранён" style="min-width:180px">
+        </div>
+        <div class="form-group">
+          <button class="btn btn-primary" id="edge-run-btn" onclick="runEdgeMap()">📡 Collect</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Edge status -->
+    <div id="edge-status"></div>
+
+    <!-- Edge results table -->
+    <div id="edge-results" class="card" style="display:none">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px">
+        <h2>Результаты</h2>
+        <div>
+          <button class="btn btn-secondary" onclick="showEdgeReport()" id="edge-report-btn" style="display:none">📄 Полный отчёт</button>
+          <button class="btn btn-secondary" onclick="exportEdgeCSV()" style="margin-left:8px">📥 CSV</button>
+        </div>
+      </div>
+      <div class="table-wrap" style="overflow-x:auto">
+        <table id="edge-table">
+          <thead>
+            <tr>
+              <th data-col="num">#</th>
+              <th data-col="name">T1 Name</th>
+              <th data-col="cluster">Edge Cluster</th>
+              <th data-col="edges">Preferred Edges</th>
+              <th data-col="active">Active Edge</th>
+              <th data-col="standby">Standby Edge</th>
+              <th data-col="mode">HA Mode</th>
+            </tr>
+          </thead>
+          <tbody id="edge-tbody">
+            <tr><td colspan="7" style="text-align:center;color:#8b949e;padding:40px">Нажмите "Collect" для загрузки данных</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+
+    <!-- Summary card for edge tab -->
+    <div id="edge-summary" class="card" style="display:none">
+      <div style="display:flex;gap:16px;flex-wrap:wrap">
+        <div><span style="color:#8b949e;font-size:12px">Total T1s</span><br><span id="edge-total" style="font-size:20px;font-weight:700;color:#58a6ff">0</span></div>
+        <div><span style="color:#8b949e;font-size:12px">With Edge Cluster</span><br><span id="edge-with-ec" style="font-size:20px;font-weight:700;color:#3fb950">0</span></div>
+        <div><span style="color:#8b949e;font-size:12px">Without Placement</span><br><span id="edge-without-ec" style="font-size:20px;font-weight:700;color:#f85149">0</span></div>
+        <div><span style="color:#8b949e;font-size:12px">HA Active</span><br><span id="edge-ha-active" style="font-size:20px;font-weight:700;color:#3fb950">0</span></div>
+        <div><span style="color:#8b949e;font-size:12px">HA Standby</span><br><span id="edge-ha-standby" style="font-size:20px;font-weight:700;color:#d29922">0</span></div>
+      </div>
+    </div>
+
+  </div>
+  <!-- ═══ END TAB: Edge Placement ═══ -->
+
 </div>
 
 <script>
@@ -241,6 +353,227 @@ let pollInterval = null;
     form.classList.add('show');
   }
 })();
+
+// ── Tab switching ──
+function switchTab(name) {
+  document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
+  document.querySelectorAll('.tab-content').forEach(c => c.classList.remove('active'));
+  document.querySelector('.tab-btn[onclick="switchTab(\'' + name + '\')"]').classList.add('active');
+  document.getElementById('tab-' + name).classList.add('active');
+}
+
+// ── Edge Map ──
+let edgeTaskId = null;
+let edgePollInterval = null;
+let edgeData = [];
+
+async function runEdgeMap() {
+  const select = document.getElementById('edge-nsx-select');
+  const nsxName = select.value;
+  const password = document.getElementById('edge-password').value;
+
+  if (!nsxName || nsxName === '__add__') {
+    alert('Выберите NSX Manager из списка');
+    return;
+  }
+
+  const btn = document.getElementById('edge-run-btn');
+  btn.disabled = true;
+  btn.textContent = '⏳ Collecting…';
+
+  const form = new FormData();
+  form.append('nsx_name', nsxName);
+  if (password) form.append('password', password);
+
+  try {
+    const resp = await fetch('/run-edge-map', { method: 'POST', body: form });
+    const data = await resp.json();
+
+    if (data.status === 'need_password') {
+      document.getElementById('edge-password').focus();
+      alert('Пароль не сохранён. Введите пароль и нажмите Collect снова.');
+      btn.disabled = false;
+      btn.textContent = '📡 Collect';
+      return;
+    }
+
+    edgeTaskId = data.task_id;
+    startEdgePolling(data.task_id);
+  } catch(e) {
+    alert('Ошибка: ' + e.message);
+    btn.disabled = false;
+    btn.textContent = '📡 Collect';
+  }
+}
+
+function startEdgePolling(taskId) {
+  if (edgePollInterval) clearInterval(edgePollInterval);
+
+  edgePollInterval = setInterval(async () => {
+    try {
+      const resp = await fetch('/task/' + taskId);
+      const task = await resp.json();
+
+      const statusDiv = document.getElementById('edge-status');
+      let html = '<div class="status-box">';
+      html += '<div><span class="nsx-name">' + task.nsx_name + '</span></div>';
+      html += '<div class="value">' + task.progress + '</div>';
+      if (task.status === 'collecting' || task.status === 'starting') {
+        html += '<div class="progress-bar"><div class="fill" style="width:50%"></div></div>';
+      }
+      html += '</div>';
+      statusDiv.innerHTML = html;
+
+      if (task.status === 'done') {
+        clearInterval(edgePollInterval);
+        edgePollInterval = null;
+        document.getElementById('edge-run-btn').disabled = false;
+        document.getElementById('edge-run-btn').textContent = '📡 Collect';
+
+        // Fetch edge data
+        loadEdgeData(taskId);
+      }
+
+      if (task.status === 'error') {
+        clearInterval(edgePollInterval);
+        edgePollInterval = null;
+        html = '<div class="status-box" style="border-color:#da3633">';
+        html += '<div><span class="nsx-name">' + task.nsx_name + '</span> ❌ <span style="color:#ff7b72">Ошибка</span></div>';
+        html += '<div class="value" style="color:#ff7b72">' + (task.error || 'Unknown error') + '</div>';
+        html += '</div>';
+        statusDiv.innerHTML = html;
+        document.getElementById('edge-run-btn').disabled = false;
+        document.getElementById('edge-run-btn').textContent = '📡 Collect';
+      }
+    } catch(e) { /* ignore */ }
+  }, 2000);
+}
+
+async function loadEdgeData(taskId) {
+  try {
+    const resp = await fetch('/edge-data/' + taskId);
+    const data = await resp.json();
+    if (data.status !== 'ok') throw new Error(data.status);
+
+    edgeData = data.t1_list || [];
+    renderEdgeTable(edgeData);
+    renderEdgeSummary(edgeData);
+
+    // Show report button if report exists
+    document.getElementById('edge-report-btn').style.display = 'inline-block';
+    document.getElementById('edge-report-btn').onclick = function() {
+      window.open('/edge-report/' + taskId, '_blank');
+    };
+  } catch(e) {
+    console.error('Failed to load edge data:', e);
+  }
+}
+
+function renderEdgeSummary(data) {
+  const total = data.length;
+  const withEc = data.filter(function(e) { return e.edge_cluster_name; }).length;
+  const withHa = data.filter(function(e) { return e.ha_active_edge; }).length;
+  const withStandby = data.filter(function(e) { return e.ha_standby_edge; }).length;
+
+  document.getElementById('edge-total').textContent = total;
+  document.getElementById('edge-with-ec').textContent = withEc;
+  document.getElementById('edge-without-ec').textContent = total - withEc;
+  document.getElementById('edge-ha-active').textContent = withHa;
+  document.getElementById('edge-ha-standby').textContent = withStandby;
+  document.getElementById('edge-summary').style.display = 'block';
+}
+
+function renderEdgeTable(data) {
+  const tbody = document.getElementById('edge-tbody');
+  const results = document.getElementById('edge-results');
+
+  if (!data.length) {
+    tbody.innerHTML = '<tr><td colspan="7" style="text-align:center;color:#8b949e;padding:40px">Нет данных</td></tr>';
+    results.style.display = 'block';
+    return;
+  }
+
+  // Sort: with edge cluster first, then by name
+  data.sort(function(a, b) {
+    var ac = a.edge_cluster_name ? 0 : 1;
+    var bc = b.edge_cluster_name ? 0 : 1;
+    if (ac !== bc) return ac - bc;
+    return (a.display_name || a.id).localeCompare(b.display_name || b.id);
+  });
+
+  var html = '';
+  for (var i = 0; i < data.length; i++) {
+    var e = data[i];
+    var cluster = e.edge_cluster_name || '—';
+    var preferred = (e.preferred_edges && e.preferred_edges.length) ? e.preferred_edges.join(', ') : '—';
+    var active = e.ha_active_edge || '—';
+    var standby = e.ha_standby_edge || '—';
+    var mode = e.ha_mode || '—';
+
+    var activeStyle = e.ha_active_edge ? ' style="color:#3fb950;font-weight:600"' : '';
+    var standbyStyle = e.ha_standby_edge ? ' style="color:#8b949e"' : '';
+
+    html += '<tr>';
+    html += '<td>' + (i + 1) + '</td>';
+    html += '<td>' + escHtml(e.display_name || e.id) + '</td>';
+    html += '<td' + (e.edge_cluster_name ? ' style="background:#1a3a1a"' : '') + '>' + escHtml(cluster) + '</td>';
+    html += '<td>' + escHtml(preferred) + '</td>';
+    html += '<td' + activeStyle + '>' + escHtml(active) + '</td>';
+    html += '<td' + standbyStyle + '>' + escHtml(standby) + '</td>';
+    html += '<td>' + escHtml(mode) + '</td>';
+    html += '</tr>';
+  }
+
+  tbody.innerHTML = html;
+  results.style.display = 'block';
+}
+
+function exportEdgeCSV() {
+  if (!edgeData.length) return;
+
+  var lines = [];
+  lines.push(['#', 'T1 Name', 'Edge Cluster', 'Preferred Edges', 'Active Edge', 'Standby Edge', 'HA Mode'].join(','));
+
+  for (var i = 0; i < edgeData.length; i++) {
+    var e = edgeData[i];
+    var row = [
+      i + 1,
+      '"' + (e.display_name || e.id) + '"',
+      '"' + (e.edge_cluster_name || '') + '"',
+      '"' + ((e.preferred_edges || []).join('; ')) + '"',
+      '"' + (e.ha_active_edge || '') + '"',
+      '"' + (e.ha_standby_edge || '') + '"',
+      '"' + (e.ha_mode || '') + '"',
+    ];
+    lines.push(row.join(','));
+  }
+
+  var csv = lines.join('\n');
+  var blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+  var url = URL.createObjectURL(blob);
+  var a = document.createElement('a');
+  a.href = url;
+  a.download = 'nsx-t1-edge-placement.csv';
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+  URL.revokeObjectURL(url);
+}
+
+function escHtml(s) {
+  if (s === null || s === undefined) return '';
+  var d = document.createElement('div');
+  d.appendChild(document.createTextNode(s));
+  return d.innerHTML;
+}
+
+// Sync edge NSX selector with main NSX selector
+document.getElementById('edge-nsx-select').addEventListener('change', function() {
+  var mainSelect = document.getElementById('nsx-select');
+  if (this.value !== '__add__' && mainSelect.value === '__add__') {
+    // If user selected a real NSX in edge tab, sync to main tab
+  }
+});
 
 // NSX selector change
 document.getElementById('nsx-select').addEventListener('change', function() {
