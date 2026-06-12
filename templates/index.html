@@ -315,6 +315,12 @@
           <button class="btn btn-secondary" onclick="exportEdgeCSV()" style="margin-left:8px">📥 CSV</button>
         </div>
       </div>
+      <div style="margin-bottom:12px">
+        <label style="font-size:11px;color:#6c757d;text-transform:uppercase;letter-spacing:0.5px;margin-right:8px">Active Edge</label>
+        <select id="edge-filter" onchange="applyEdgeFilter()" style="min-width:200px">
+          <option value="">— Все —</option>
+        </select>
+      </div>
       <div class="table-wrap" style="overflow-x:auto">
         <table id="edge-table">
           <thead>
@@ -466,6 +472,7 @@ async function loadEdgeData(taskId) {
     if (data.status !== 'ok') throw new Error(data.status);
 
     edgeData = data.t1_list || [];
+    populateEdgeFilter(edgeData);
     renderEdgeTable(edgeData);
     renderEdgeSummary(edgeData);
 
@@ -477,6 +484,34 @@ async function loadEdgeData(taskId) {
   } catch(e) {
     console.error('Failed to load edge data:', e);
   }
+}
+
+function populateEdgeFilter(data) {
+  var seen = {};
+  var select = document.getElementById('edge-filter');
+  select.innerHTML = '<option value="">— Все —</option>';
+  data.forEach(function(e) {
+    var edge = e.ha_active_edge;
+    if (edge && !seen[edge]) {
+      seen[edge] = true;
+      var opt = document.createElement('option');
+      opt.value = edge;
+      opt.textContent = edge;
+      select.appendChild(opt);
+    }
+  });
+}
+
+function applyEdgeFilter() {
+  var val = document.getElementById('edge-filter').value;
+  if (!val) {
+    renderEdgeTable(edgeData);
+    renderEdgeSummary(edgeData);
+    return;
+  }
+  var filtered = edgeData.filter(function(e) { return e.ha_active_edge === val; });
+  renderEdgeTable(filtered);
+  renderEdgeSummary(filtered);
 }
 
 function renderEdgeSummary(data) {
