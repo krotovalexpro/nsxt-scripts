@@ -323,7 +323,6 @@
       <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px">
         <h2>Результаты</h2>
         <div>
-          <button class="btn btn-secondary" onclick="showEdgeReport()" id="edge-report-btn" style="display:none">📄 Полный отчёт</button>
           <button class="btn btn-secondary" onclick="exportEdgeCSV()" style="margin-left:8px">📥 CSV</button>
         </div>
       </div>
@@ -492,12 +491,6 @@ async function loadEdgeData(taskId) {
     populateEdgeFilter(edgeData);
     renderEdgeTable(edgeData);
     renderEdgeSummary(edgeData);
-
-    // Show report button if report exists
-    document.getElementById('edge-report-btn').style.display = 'inline-block';
-    document.getElementById('edge-report-btn').onclick = function() {
-      window.open('/edge-report/' + taskId, '_blank');
-    };
   } catch(e) {
     console.error('Failed to load edge data:', e);
   }

@@ -233,8 +233,6 @@ def _run_edge_map(task: TaskState, conn: dict):
             f.write(f'password: "{conn.get("password", "")}"\n')
             f.write(f"timeout: 300\n")
 
-        report_path = tmp_dir / "edge_report.html"
-
         # Run CLI to get JSON data
         task.progress = "Fetching T1 locale-services and HA status…"
         result = subprocess.run(
@@ -253,30 +251,12 @@ def _run_edge_map(task: TaskState, conn: dict):
             error_msg = result.stderr.strip() or "Unknown error"
             raise RuntimeError(f"Edge map failed: {error_msg}")
 
+        task.report_path = None
+
         # Parse JSON from stdout
         import json as _json
         data = _json.loads(result.stdout)
         task.edge_data = data.get("t1_list", [])
-
-        # Generate HTML report
-        task.progress = "Generating report…"
-        result2 = subprocess.run(
-            [
-                sys.executable, str(MONITOR_SCRIPT),
-                "--edge-map",
-                "--output", str(report_path),
-                "--config", str(config_path),
-                "--workers", "8",
-            ],
-            cwd=str(tmp_dir),
-            capture_output=True, text=True, timeout=600,
-        )
-
-        if result2.returncode != 0:
-            raise RuntimeError(f"Report generation failed:\n{result2.stderr}")
-
-        if report_path.exists():
-            task.report_path = str(report_path)
 
         task.status = "done"
         task.progress = f"Collected {len(task.edge_data)} T1s"
@@ -475,20 +455,6 @@ async def get_edge_data(task_id: str):
         "total": len(task.edge_data),
         "t1_list": task.edge_data,
     })
-
-
-@app.get("/edge-report/{task_id}")
-async def get_edge_report(task_id: str):
-    """Return the full HTML edge placement report."""
-    task = _tasks.get(task_id)
-    if not task:
-        raise HTTPException(404, "Task not found")
-    if not task.report_path or not Path(task.report_path).exists():
-        raise HTTPException(404, "Report not ready yet")
-
-    with open(task.report_path) as f:
-        html = f.read()
-    return HTMLResponse(content=html)
 
 
 @app.get("/tasks", response_class=JSONResponse)
